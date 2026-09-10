@@ -1,0 +1,197 @@
+# Safe git maintenance for every repo under a directory tree.
+#
+# By default it never touches the working tree, uses no `git clean`, no reflog
+# expiry, no `--prune=now`, and never deletes branches, tags, stashes or remotes.
+#
+# Usage:
+#   git-maintenance                 # optimize all repos under /home/bubba/Projects
+#   git-maintenance /some/dir       # optimize repos under a specific directory
+#   git-maintenance -b /some/dir    # same, via flag
+#   git-maintenance -n              # dry run: report stats, change nothing
+#   git-maintenance --dry-run       # same as -n
+#   git-maintenance -a              # aggressive: adds --aggressive --prune=now
+#                                   # (much slower; drops the recovery grace period)
+#
+# Each repo reports: size before -> after (reclaimed), loose -> packed object
+# counts, stale remote refs pruned, and the fsck result. The final line totals
+# repos optimized/skipped and space reclaimed. In dry-run it instead totals the
+# projected reclaim: current object data minus a read-only simulated repack, which
+# accounts for loose objects, pack rebuilding and pruning.
+
+function __gm_human --description 'format a KiB value as human-readable'
+    set -l kb $argv[1]
+    test -n "$kb"; or set kb 0
+    set -l magnitude (math "abs($kb)")
+    if test $magnitude -ge 1048576
+        echo (math -s1 "$kb / 1048576")" GiB"
+    else if test $magnitude -ge 1024
+        echo (math -s1 "$kb / 1024")" MiB"
+    else
+        echo "$kb KiB"
+    end
+end
+
+function git-maintenance --description 'Safely optimize all git repos under a directory'
+    argparse 'n/dry-run' 'b/base=' 'a/aggressive' -- $argv; or return 2
+
+    set -l base /home/bubba/Projects
+    test -n "$_flag_base"; and set base "$_flag_base"
+    test (count $argv) -gt 0; and set base "$argv[1]"
+    set -l dry_run $_flag_dry_run
+    set -l aggressive $_flag_aggressive
+
+    if not test -d "$base"
+        echo "git-maintenance: not a directory: $base" >&2
+        return 1
+    end
+
+    set -l green (set_color green)
+    set -l gold (set_color yellow)
+    set -l red (set_color red)
+    set -l dim (set_color 8a8a8a)
+    set -l off (set_color normal)
+
+    if test -n "$aggressive"
+        echo "$red!$off aggressive mode: adding --aggressive --prune=now (much slower, no recovery grace)$off"
+    end
+
+    set -l gc_flags --quiet
+    if test -n "$aggressive"
+        set -a gc_flags --aggressive --prune=now
+    else if git gc -h 2>&1 | string match -q '*--cruft*'
+        set -a gc_flags --cruft
+    end
+    set -l has_midx false
+    if git repack -h 2>&1 | string match -q '*--write-midx*'
+        set has_midx true
+    end
+
+    set -l total 0
+    set -l optimized 0
+    set -l skipped 0
+    set -l reclaimed_kb 0
+    set -l reclaimable_kb 0
+    set -l seen
+
+    for gitdir in (find "$base" -name .git -prune -print 2>/dev/null | sort)
+        set -l repo (dirname "$gitdir")
+        set -l name (string replace "$base/" '' "$repo")
+
+        # Resolve the shared object store so linked worktrees/submodules run once.
+        set -l common_raw (git -C "$repo" rev-parse --git-common-dir 2>/dev/null)
+        set -l common
+        if test -n "$common_raw"
+            if string match -q '/*' -- "$common_raw"
+                set common (realpath "$common_raw")
+            else
+                set common (realpath "$repo/$common_raw")
+            end
+        end
+        if test -z "$common"
+            echo "$red x$off $name $dim(unreadable repo)$off"
+            set skipped (math $skipped + 1)
+            continue
+        end
+        if contains -- "$common" $seen
+            continue
+        end
+        set -a seen "$common"
+        set total (math $total + 1)
+
+        # Skip repos with an in-progress operation or a live/stale lock.
+        set -l gitdir_raw (git -C "$repo" rev-parse --git-dir 2>/dev/null)
+        set -l gitdir_abs
+        if string match -q '/*' -- "$gitdir_raw"
+            set gitdir_abs (realpath "$gitdir_raw")
+        else
+            set gitdir_abs (realpath "$repo/$gitdir_raw")
+        end
+        set -l busy
+        for marker in index.lock MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD BISECT_LOG rebase-merge rebase-apply
+            test -e "$gitdir_abs/$marker"; and set busy "$marker"; and break
+        end
+        if test -n "$busy"
+            echo "$gold !$off $name $gold(skip: $busy present)$off"
+            set skipped (math $skipped + 1)
+            continue
+        end
+
+        # Stats before any mutation.
+        set -l raw (git -C "$repo" count-objects -v 2>/dev/null)
+        set -l loose (string match -r '^count: [0-9]+' -- $raw | string replace -r '^count: ' '')
+        set -l packs (string match -r '^packs: [0-9]+' -- $raw | string replace -r '^packs: ' '')
+        set -l loose_kb (string match -r '^size: [0-9]+' -- $raw | string replace -r '^size: ' '')
+        test -n "$loose_kb"; or set loose_kb 0
+        set -l before_kb (du -sk "$gitdir_abs" 2>/dev/null | cut -f1)
+        test -n "$before_kb"; or set before_kb 0
+        set -l remotes (git -C "$repo" remote)
+
+        if test -n "$dry_run"
+            # Reclaim estimate = current object storage (loose + packs) minus the
+            # pack git would rebuild (read-only). Existing cruft packs are kept by
+            # gc, so add their bytes back.
+            set -l packdir (git -C "$repo" rev-parse --path-format=absolute --git-path objects/pack 2>/dev/null)
+            set -l cur_b 0
+            set -l cruft_b 0
+            for pf in "$packdir"/*.pack
+                test -e "$pf"; or continue
+                set -l psz (stat -c%s "$pf" 2>/dev/null)
+                test -n "$psz"; or set psz 0
+                set cur_b (math "$cur_b + $psz")
+                set -l mt (string replace -r '\.pack$' '.mtimes' "$pf")
+                test -e "$mt"; and set cruft_b (math "$cruft_b + $psz")
+            end
+            set -l newb (git -C "$repo" pack-objects --all --reflog --indexed-objects --stdout 2>/dev/null | wc -c)
+            test -n "$newb"; or set newb 0
+            set -l est_b (math "$loose_kb * 1024 + $cur_b - $newb - $cruft_b")
+            test "$est_b" -lt 0; and set est_b 0
+            set -l est_kb (math "floor($est_b / 1024)")
+            set reclaimable_kb (math "$reclaimable_kb + $est_kb")
+            echo "$dim    $name  est.reclaim: "(__gm_human $est_kb)"  loose:$loose/"(__gm_human $loose_kb)" packs:$packs remotes:"(count $remotes)" .git:"(__gm_human $before_kb)$off
+            set optimized (math $optimized + 1)
+            continue
+        end
+
+        # Optimize (working tree is never touched).
+        set -l pruned 0
+        for remote in $remotes
+            set -l pout (env GIT_TERMINAL_PROMPT=0 git -C "$repo" remote prune "$remote" 2>&1)
+            set pruned (math $pruned + (count (string match -r '\[pruned\]' -- $pout)))
+        end
+        git -C "$repo" worktree prune >/dev/null 2>&1
+        git -C "$repo" gc $gc_flags
+        git -C "$repo" commit-graph write --reachable >/dev/null 2>&1
+        if test "$has_midx" = true
+            git -C "$repo" repack --write-midx=incremental --quiet >/dev/null 2>&1
+        end
+        set -l fsck_out (git -C "$repo" fsck --full --no-progress 2>&1)
+        set -l dangling (count (string match -r 'dangling ' -- $fsck_out))
+        set -l fsck_state
+        if test (count (string match -r 'error:|fatal:|missing' -- $fsck_out)) -gt 0
+            set fsck_state "$red fsck:ERRORS$off"
+        else if test $dangling -gt 0
+            set fsck_state "fsck:ok ($dangling dangling)"
+        else
+            set fsck_state "fsck:ok"
+        end
+
+        # Stats after.
+        set -l raw2 (git -C "$repo" count-objects -v 2>/dev/null)
+        set -l loose2 (string match -r '^count: [0-9]+' -- $raw2 | string replace -r '^count: ' '')
+        set -l packs2 (string match -r '^packs: [0-9]+' -- $raw2 | string replace -r '^packs: ' '')
+        set -l after_kb (du -sk "$gitdir_abs" 2>/dev/null | cut -f1)
+        test -n "$after_kb"; or set after_kb 0
+
+        set -l delta (math "$before_kb - $after_kb")
+        set reclaimed_kb (math "$reclaimed_kb + $delta")
+
+        echo "$green >$off $name  "(__gm_human $before_kb)" -> "(__gm_human $after_kb)"  ("(__gm_human $delta)")  loose:$loose->$loose2 packs:$packs->$packs2  pruned:$pruned  $fsck_state"
+
+        set optimized (math $optimized + 1)
+    end
+
+    set -l tail "reclaimed: "(__gm_human $reclaimed_kb)
+    test -n "$dry_run"; and set tail "reclaimable (est.): "(__gm_human $reclaimable_kb)
+    echo
+    echo $green"optimized: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail
+end
