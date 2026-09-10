@@ -119,14 +119,16 @@ and AUR apps via `yay`. Edit the `REPO_APPS` / `AUR_APPS` arrays to change the s
 
 ## refresh
 
-Switches the `DP-1` monitor refresh rate between 240Hz and 120Hz. Designed as a
-LACT profile hook: run with `on` when a game profile activates and `off` when it
+Switches the `DP-1` monitor refresh rate between 240Hz and 120Hz. With no
+argument it prints the current refresh rate and usage. Designed as a LACT
+profile hook: run with `on` when a game profile activates and `off` when it
 deactivates. When run as root (`lactd`), it picks up the desktop session
 environment automatically.
 
 ```sh
-./src/refresh.sh 240   # switch to 240Hz
-./src/refresh.sh 120   # switch to 120Hz
+./src/refresh.sh        # print the current refresh rate and usage
+./src/refresh.sh 240    # switch to 240Hz
+./src/refresh.sh 120    # switch to 120Hz
 ```
 
 Requires `kscreen-doctor`.

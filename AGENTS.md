@@ -15,7 +15,7 @@ All scripts live in `src/`:
 - `src/git-ignore-tidy.fish` — report and untrack files that are both tracked and ignored.
 - `src/update-opencode.fish` — update the opencode CLI and desktop AppImage.
 - `src/install-apps.sh` — install a fixed set of repo and AUR packages.
-- `src/refresh.sh` — switch the DP-1 monitor refresh rate (LACT profile hook).
+- `src/refresh.sh` — print or switch the DP-1 monitor refresh rate (LACT profile hook).
 - `README.md` — usage and overview.
 
 ## Workflow
