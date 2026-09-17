@@ -1,3 +1,13 @@
+# List (dry run) then clean pacman and AUR package leftovers: orphans, synced
+# package cache, stale download dirs and the AUR build cache.
+#
+# Usage:
+#   repoclean
+#
+# The package cache report previews what the AUR helper's `-Sc` will reclaim
+# (old versions at keep-1 plus uninstalled packages), so the counts match the
+# space actually freed. Cleanup prompts once before making any changes.
+#
 function repoclean --description 'List then clean pacman/AUR package leftovers'
     set -l sec (set_color --bold yellow)
     set -l ok (set_color green)
@@ -30,9 +40,9 @@ function repoclean --description 'List then clean pacman/AUR package leftovers'
 
     echo
     echo $sec"Package cache"$off" (/var/cache/pacman/pkg)"
-    echo "  "$dim"total size: "$off(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
-    echo "  "$dim"prune (keep 3):  "$off(paccache -d -k 3 2>/dev/null | tail -1)
-    echo "  "$dim"uninstalled:    "$off(paccache -d -u -k 0 2>/dev/null | tail -1)
+    echo "  "$dim"total size:    "$off(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
+    echo "  "$dim"old versions:  "$off(paccache -d -k 1 2>/dev/null | tail -1)
+    echo "  "$dim"uninstalled:   "$off(paccache -d -u -k 0 2>/dev/null | tail -1)
 
     if test -n "$aur"
         echo

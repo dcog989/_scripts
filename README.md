@@ -41,7 +41,7 @@ Lists and cleans pacman/AUR package leftovers on Arch-based systems. Prints a re
 Cleans:
 
 - **Orphans** — packages installed as dependencies that are no longer required (`pacman -Qdtq`).
-- **Package cache** — prunes `/var/cache/pacman/pkg` keeping the 3 most recent versions, and drops cached packages for uninstalled packages (`paccache`).
+- **Package cache** — prunes `/var/cache/pacman/pkg` with `paccache`, then clears it further via the AUR helper's `-Sc`. The report previews what that actually reclaims (old versions at keep-1 plus uninstalled packages).
 - **AUR build cache** — reports and cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present.
 - **Unneeded AUR deps** — removes orphaned AUR dependencies via `yay -Yc` / `paru -c`.
 
