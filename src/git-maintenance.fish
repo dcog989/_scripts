@@ -32,7 +32,7 @@ function __gm_human --description 'format a KiB value as human-readable'
 end
 
 function git-maintenance --description 'Safely optimize all git repos under a directory'
-    argparse 'n/dry-run' 'b/base=' 'a/aggressive' -- $argv; or return 2
+    argparse n/dry-run 'b/base=' a/aggressive -- $argv; or return 2
 
     set -l base /home/bubba/Projects
     test -n "$_flag_base"; and set base "$_flag_base"

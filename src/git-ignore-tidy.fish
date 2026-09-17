@@ -13,7 +13,7 @@
 #   git-ignore-tidy -y              # untrack all matches without prompting
 
 function git-ignore-tidy --description 'Untrack files that are both tracked and ignored'
-    argparse 'n/dry-run' 'y/yes' 'b/base=' -- $argv; or return 2
+    argparse n/dry-run y/yes 'b/base=' -- $argv; or return 2
 
     set -l base /home/bubba/Projects
     test -n "$_flag_base"; and set base "$_flag_base"
