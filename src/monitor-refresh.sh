@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# refresh.sh - Switch DP-1 monitor refresh rate between 240Hz and 120Hz.
+# monitor-refresh.sh - Switch DP-1 monitor refresh rate between 240Hz and 120Hz.
 #
 # Designed as a LACT profile hook: run with "on" when a game profile
 # activates and "off" when it deactivates. When executed as root
