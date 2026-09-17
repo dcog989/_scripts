@@ -30,15 +30,13 @@ chmod +x src/*.sh
 ./src/install-apps.sh
 ```
 
-Most scripts assume the developer environment described in `AGENTS.md`
-(pacman/paccache, `yay`, `git`, `jq`, `curl`).
+Most scripts assume the developer environment described in `AGENTS.md` (pacman/paccache, `yay`, `git`, `jq`, `curl`).
 
 ---
 
 ## repoclean
 
-Lists and cleans pacman/AUR package leftovers on Arch-based systems. Prints a
-report, asks for confirmation, then runs the cleanup steps.
+Lists and cleans pacman/AUR package leftovers on Arch-based systems. Prints a report, asks for confirmation, then runs the cleanup steps.
 
 Cleans:
 
@@ -47,9 +45,7 @@ Cleans:
 - **AUR build cache** — reports and cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present.
 - **Unneeded AUR deps** — removes orphaned AUR dependencies via `yay -Yc` / `paru -c`.
 
-Requires `pacman`, `paccache`, and optionally `yay` or `paru`. Destructive
-operations run only after confirmation; pacman/paccache steps require `sudo`.
-If no AUR helper is found, AUR-specific steps are skipped with a notice.
+Requires `pacman`, `paccache`, and optionally `yay` or `paru`. Destructive operations run only after confirmation; pacman/paccache steps require `sudo`. If no AUR helper is found, AUR-specific steps are skipped with a notice.
 
 ```sh
 repoclean
@@ -59,12 +55,9 @@ repoclean
 
 ## git-maintenance
 
-Safe git maintenance for every repository under a directory tree. By default it
-never touches the working tree: no `git clean`, no reflog expiry, no
-`--prune=now`, and never deletes branches, tags, stashes or remotes.
+Safe git maintenance for every repository under a directory tree. By default it never touches the working tree: no `git clean`, no reflog expiry, no `--prune=now`, and never deletes branches, tags, stashes or remotes.
 
-Each repo reports size before/after, loose→packed object counts, pruned remote
-refs, and the `fsck` result.
+Each repo reports size before/after, loose→packed object counts, pruned remote refs, and the `fsck` result.
 
 ```sh
 git-maintenance                 # optimize all repos under /home/bubba/Projects
@@ -78,9 +71,7 @@ git-maintenance -a              # aggressive: --aggressive --prune=now (much slo
 
 ## git-ignore-tidy
 
-Reports files that are both tracked and ignored (a tracked file listed in
-`.gitignore` is usually a mistake). Removal uses `git rm --cached`, keeping the
-file on disk; changes are staged, not committed. Submodule gitlinks are skipped.
+Reports files that are both tracked and ignored (a tracked file listed in `.gitignore` is usually a mistake). Removal uses `git rm --cached`, keeping the file on disk; changes are staged, not committed. Submodule gitlinks are skipped.
 
 ```sh
 git-ignore-tidy                 # scan all repos under /home/bubba/Projects
@@ -94,9 +85,7 @@ git-ignore-tidy -y              # untrack all matches without prompting
 
 ## update-opencode
 
-Updates the opencode CLI and desktop AppImage from the latest GitHub release.
-Skips if already current, stops running opencode processes before replacing
-binaries in `~/.local/bin`.
+Updates the opencode CLI and desktop AppImage from the latest GitHub release. Skips if already current, stops running opencode processes before replacing binaries in `~/.local/bin`.
 
 ```sh
 update-opencode
@@ -108,8 +97,7 @@ Requires `curl` and `jq`.
 
 ## install-apps
 
-Installs a fixed set of packages: repo apps via `pacman` (CachyOS v3 / Arch)
-and AUR apps via `yay`. Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
+Installs a fixed set of packages: repo apps via `pacman` (CachyOS v3 / Arch) and AUR apps via `yay`. Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
 
 ```sh
 ./src/install-apps.sh
@@ -119,11 +107,7 @@ and AUR apps via `yay`. Edit the `REPO_APPS` / `AUR_APPS` arrays to change the s
 
 ## refresh
 
-Switches the `DP-1` monitor refresh rate between 240Hz and 120Hz. With no
-argument it prints the current refresh rate and usage. Designed as a LACT
-profile hook: run with `on` when a game profile activates and `off` when it
-deactivates. When run as root (`lactd`), it picks up the desktop session
-environment automatically.
+Switches the `DP-1` monitor refresh rate between 240Hz and 120Hz. With no argument it prints the current refresh rate and usage. Designed as a LACT profile hook: run with `on` when a game profile activates and `off` when it deactivates. When run as root (`lactd`), it picks up the desktop session environment automatically.
 
 ```sh
 ./src/refresh.sh        # print the current refresh rate and usage
