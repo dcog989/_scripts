@@ -1,3 +1,12 @@
+# Update the opencode CLI and desktop AppImage from the latest GitHub release.
+# Installs the CLI to ~/.local/bin/opencode and the AppImage to
+# ~/.local/bin/opencode-desktop.AppImage, terminating any running desktop
+# instance first.
+#
+# Usage:
+#   update-opencode
+#
+# No-op when the installed CLI already matches the latest release tag.
 function update-opencode --description 'Update opencode CLI and desktop AppImage'
     set -l rel (curl -s https://api.github.com/repos/anomalyco/opencode/releases/latest)
     set -l ver (echo $rel | jq -r .tag_name | string trim --chars=v)
