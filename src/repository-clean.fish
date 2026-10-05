@@ -2,13 +2,13 @@
 # package cache, stale download dirs and the AUR build cache.
 #
 # Usage:
-#   repoclean
+#   repository-clean
 #
 # The package cache report previews what the AUR helper's `-Sc` will reclaim
 # (old versions at keep-1 plus uninstalled packages), so the counts match the
 # space actually freed. Cleanup prompts once before making any changes.
 #
-function repoclean --description 'List then clean pacman/AUR package leftovers'
+function repository-clean --description 'List then clean pacman/AUR package leftovers'
     set -l sec (set_color --bold yellow)
     set -l ok (set_color green)
     set -l bad (set_color red)
