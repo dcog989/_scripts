@@ -6,37 +6,38 @@ A collection of scripts for maintaining an Arch-based (CachyOS) system and its g
 
 | Script | Type | Purpose |
 | --- | --- | --- |
-| `src/repoclean.fish` | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
+| `src/repository-clean.fish` | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
 | `src/git-maintenance.fish` | fish function | Safely optimize every git repo under a directory tree. |
 | `src/git-ignore-tidy.fish` | fish function | Report and untrack files that are both tracked and ignored. |
-| `src/update-opencode.fish` | fish function | Update the opencode CLI and desktop AppImage. |
+| `src/big-files.fish` | fish function | Report source files over 400 lines, grouped by project. |
+| `src/opencode-update.fish` | fish function | Update the opencode CLI and desktop AppImage. |
 | `src/install-apps.sh` | bash script | Install a fixed set of repo and AUR packages. |
 | `src/monitor-refresh.sh` | bash script | Switch the DP-1 monitor refresh rate (LACT profile hook). |
 | `src/lact-gaming.sh` | bash script | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
-| `src/opencode-maint.sh` | bash script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
+| `src/opencode-maintenance.sh` | bash script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 
 ## Install
 
-Fish functions: source them, or drop them into your fish functions directory.
+Fish functions: source them directly, or symlink them into your fish functions directory so repo edits take effect immediately.
 
 ```sh
-source /path/to/src/repoclean.fish
+source /path/to/src/repository-clean.fish
 # or
-cp src/*.fish ~/.config/fish/functions/
+ln -sf /path/to/src/*.fish ~/.config/fish/functions/
 ```
 
-Shell scripts: make them executable and run them directly.
+Shell scripts: mark them executable and symlink them onto your `PATH`.
 
 ```sh
-chmod +x src/*.sh
-./src/install-apps.sh
+chmod +x /path/to/src/*.sh
+ln -sf /path/to/src/*.sh ~/.local/bin/
 ```
 
 Most scripts assume the developer environment described in `AGENTS.md` (pacman/paccache, `yay`, `git`, `jq`, `curl`).
 
 ---
 
-## repoclean
+## repository-clean
 
 Lists and cleans pacman/AUR package leftovers on Arch-based systems. Prints a report, asks for confirmation, then runs the cleanup steps.
 
@@ -50,7 +51,7 @@ Cleans:
 Requires `pacman`, `paccache`, and optionally `yay` or `paru`. Destructive operations run only after confirmation; pacman/paccache steps require `sudo`. If no AUR helper is found, AUR-specific steps are skipped with a notice.
 
 ```sh
-repoclean
+repository-clean
 ```
 
 ---
@@ -81,6 +82,17 @@ git-ignore-tidy /some/dir       # scan a specific directory
 git-ignore-tidy -b /some/dir    # same, via flag
 git-ignore-tidy -n              # report only, never prompt or remove
 git-ignore-tidy -y              # untrack all matches without prompting
+```
+
+---
+
+## big-files
+
+Reports source files exceeding 400 lines, grouped by enclosing project and sorted by line count (largest first). A directory counts as a project root when it contains a `.git` marker; files outside any project are grouped by their top-level directory.
+
+```sh
+big-files                # scan the current directory
+big-files /some/dir      # scan a specific directory
 ```
 
 ---
@@ -147,7 +159,7 @@ Requires `kscreen-doctor`, `loginctl`, and `runuser` (util-Linux).
 
 ---
 
-## opencode-maint
+## opencode-maintenance
 
 Periodic maintenance for OpenCode:
 
@@ -158,9 +170,9 @@ Periodic maintenance for OpenCode:
 A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes are skipped while OpenCode is running (snapshot/log cleanup still runs). Output is appended to `~/.local/state/opencode/maint/maint.log` and echoed to the terminal. Intended to run from a systemd user timer or cron.
 
 ```sh
-./src/opencode-maint.sh                 # normal run
-DRY_RUN=1 ./src/opencode-maint.sh       # report what would be pruned, change nothing
-DEAD_GRACE_DAYS=0 ./src/opencode-maint.sh
+./src/opencode-maintenance.sh                 # normal run
+DRY_RUN=1 ./src/opencode-maintenance.sh       # report what would be pruned, change nothing
+DEAD_GRACE_DAYS=0 ./src/opencode-maintenance.sh
 ```
 
 Tunables: `DEAD_GRACE_DAYS`, `LOG_MAX_MB`, `LOG_KEEP`, `DO_VACUUM`, `ROOTS`, `SNAP_DIR`.
