@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# opencode-maint.sh - periodic maintenance for OpenCode
+# opencode-maintenance.sh - periodic maintenance for OpenCode
 #
-# `DRY_RUN=1 bash /home/bubba/Projects/_scripts/src/opencode-maint.sh`
-# `bash /home/bubba/Projects/_scripts/src/opencode-maint.sh`
+# `DRY_RUN=1 bash /home/bubba/Projects/_scripts/src/opencode-maintenance.sh`
+# `bash /home/bubba/Projects/_scripts/src/opencode-maintenance.sh`
 #
 #  1. Prune OpenCode SQLite rows whose project directory no longer exists
 #     (prevents "Failed to send prompt / Unable to retrieve session").
@@ -26,9 +26,9 @@ OC_DIR="${OC_DIR:-$HOME/.local/share/opencode}"
 DB="${OC_DB:-$OC_DIR/opencode.db}"
 LOG="${OC_LOG:-$OC_DIR/log/opencode.log}"
 SNAP_DIR="${SNAP_DIR:-$OC_DIR/snapshot}"
-STATE_DIR="${OC_STATE:-$HOME/.local/state/opencode}/maint"
+STATE_DIR="${OC_STATE:-$HOME/.local/state/opencode}/maintenance"
 STATE_FILE="$STATE_DIR/dead_paths.tsv"
-MAINT_LOG="$STATE_DIR/maint.log"
+MAINT_LOG="$STATE_DIR/maintenance.log"
 
 DEAD_GRACE_DAYS="${DEAD_GRACE_DAYS:-7}"
 LOG_MAX_MB="${LOG_MAX_MB:-50}"
