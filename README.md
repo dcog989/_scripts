@@ -12,6 +12,7 @@ A collection of scripts for maintaining an Arch-based (CachyOS) system and its g
 | `src/update-opencode.fish` | fish function | Update the opencode CLI and desktop AppImage. |
 | `src/install-apps.sh` | bash script | Install a fixed set of repo and AUR packages. |
 | `src/refresh.sh` | bash script | Switch the DP-1 monitor refresh rate (LACT profile hook). |
+| `src/opencode-maint.sh` | bash script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 
 ## Install
 
@@ -116,3 +117,23 @@ Switches the `DP-1` monitor refresh rate between 240Hz and 120Hz. With no argume
 ```
 
 Requires `kscreen-doctor`.
+
+---
+
+## opencode-maint
+
+Periodic maintenance for OpenCode:
+
+- Removes SQLite rows for project directories that no longer exist (which otherwise surface as "Failed to send prompt / Unable to retrieve session").
+- Deletes `snapshot/<project-id>/` git dirs for projects no longer in the DB (revert snapshots; `global` is kept).
+- Rotates `~/.local/share/opencode/log/opencode.log`.
+
+A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes are skipped while OpenCode is running (snapshot/log cleanup still runs). Output is appended to `~/.local/state/opencode/maint/maint.log` and echoed to the terminal. Intended to run from a systemd user timer or cron.
+
+```sh
+./src/opencode-maint.sh                 # normal run
+DRY_RUN=1 ./src/opencode-maint.sh       # report what would be pruned, change nothing
+DEAD_GRACE_DAYS=0 ./src/opencode-maint.sh
+```
+
+Tunables: `DEAD_GRACE_DAYS`, `LOG_MAX_MB`, `LOG_KEEP`, `DO_VACUUM`, `ROOTS`, `SNAP_DIR`.
