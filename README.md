@@ -11,7 +11,8 @@ A collection of scripts for maintaining an Arch-based (CachyOS) system and its g
 | `src/git-ignore-tidy.fish` | fish function | Report and untrack files that are both tracked and ignored. |
 | `src/update-opencode.fish` | fish function | Update the opencode CLI and desktop AppImage. |
 | `src/install-apps.sh` | bash script | Install a fixed set of repo and AUR packages. |
-| `src/refresh.sh` | bash script | Switch the DP-1 monitor refresh rate (LACT profile hook). |
+| `src/monitor-refresh.sh` | bash script | Switch the DP-1 monitor refresh rate (LACT profile hook). |
+| `src/lact-gaming.sh` | bash script | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
 | `src/opencode-maint.sh` | bash script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 
 ## Install
@@ -84,12 +85,12 @@ git-ignore-tidy -y              # untrack all matches without prompting
 
 ---
 
-## update-opencode
+## opencode-update
 
 Updates the opencode CLI and desktop AppImage from the latest GitHub release. Skips if already current, stops running opencode processes before replacing binaries in `~/.local/bin`.
 
 ```sh
-update-opencode
+opencode-update
 ```
 
 Requires `curl` and `jq`.
@@ -106,17 +107,43 @@ Installs a fixed set of packages: repo apps via `pacman` (CachyOS v3 / Arch) and
 
 ---
 
-## refresh
+## monitor-refresh
 
-Switches the `DP-1` monitor refresh rate between 240Hz and 120Hz. With no argument it prints the current refresh rate and usage. Designed as a LACT profile hook: run with `on` when a game profile activates and `off` when it deactivates. When run as root (`lactd`), it picks up the desktop session environment automatically.
+Switches the `DP-1` monitor refresh rate between 240Hz and 120Hz. With no argument it prints the current refresh rate and usage. Designed as a LACT profile hook: run with `240` when a game profile activates and `120` when it deactivates. When run as root (`lactd`), it picks up the desktop session environment automatically.
 
 ```sh
-./src/refresh.sh        # print the current refresh rate and usage
-./src/refresh.sh 240    # switch to 240Hz
-./src/refresh.sh 120    # switch to 120Hz
+./src/monitor-refresh.sh        # print the current refresh rate and usage
+./src/monitor-refresh.sh 240    # switch to 240Hz
+./src/monitor-refresh.sh 120    # switch to 120Hz
 ```
 
 Requires `kscreen-doctor`.
+
+---
+
+## lact-gaming
+
+LACT "Gaming" profile hook combining the refresh switch with parking lightweight background tray apps.
+
+- `on` — switch `DP-1` to 240Hz, then stop any running `cliptoo` and KopiaUI (`/opt/KopiaUI/kopia-ui`) instances, recording which ones were running.
+- `off` — switch `DP-1` to 120Hz, then restart only the apps that were running at activation (state in `~/.local/state/lact-gaming/active-apps`).
+
+Designed to run as root from `lactd`; like `monitor-refresh.sh` it enters the session user's Wayland/X11 environment. Stop is graceful (`SIGTERM`, then `SIGKILL` after ~5s).
+
+```sh
+./src/lact-gaming.sh on     # gaming profile activated
+./src/lact-gaming.sh off    # gaming profile deactivated
+```
+
+Point the LACT Gaming profile hooks at this script instead of `monitor-refresh.sh`:
+
+```yaml
+hooks:
+  activated: /home/bubba/Projects/_scripts/src/lact-gaming.sh on
+  deactivated: /home/bubba/Projects/_scripts/src/lact-gaming.sh off
+```
+
+Requires `kscreen-doctor`, `loginctl`, and `runuser` (util-Linux).
 
 ---
 
