@@ -3,25 +3,46 @@
 # lact-gaming.sh - LACT "Gaming" profile hook: switch the DP-1 refresh rate and
 # park clipboard/backup tray apps while a game is running.
 #
-# On activation the monitor drops to its game mode and any running cliptoo /
-# KopiaUI instances are recorded (so they can be restored later) then stopped.
-# On deactivation the monitor returns to idle and only the apps that were
-# running at activation are started again.
+# On activation the monitor drops to its game mode, the refresh mode active
+# beforehand is recorded, and any running cliptoo / KopiaUI instances are
+# recorded (so they can be restored later) then stopped. On deactivation the
+# monitor returns to the recorded mode and only the apps that were running at
+# activation are started again.
+#
+# State lives in ${XDG_STATE_HOME:-$HOME/.local/state}/lact-gaming/state and
+# doubles as the "profile is active" marker: if it already exists when `on`
+# runs (e.g. `off` never fired after a crash), the recorded state is preserved
+# instead of overwritten, so `off` still restores the right values.
 #
 # Designed to run as root from lactd; it enters the desktop session user's
 # environment to reach the Wayland/X11 session.
 #
 # Usage:  lact-gaming.sh on    -> 240Hz, stop cliptoo and KopiaUI
-#         lact-gaming.sh off   -> 120Hz, restart previously stopped apps
+#         lact-gaming.sh off   -> restore recorded mode, restart stopped apps
 #
 set -euo pipefail
 
 # Configuration
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SESSION_USER="${SESSION_USER:-bubba}"
-REFRESH_SCRIPT="$SCRIPT_DIR/monitor-refresh.sh"
-MODE_GAME="240"
-MODE_IDLE="120"
+OUTPUT="DP-1"
+MODE_GAME="3840x2160@240"
+MODE_IDLE="3840x2160@120"
+STOP_TRIES=50
+STOP_INTERVAL=0.1
+
+# App table: app name -> pgrep/pkill match flag, match pattern, launch command.
+declare -A APP_MATCH_FLAG=(
+    [cliptoo]='-x'
+    [kopia-ui]='-f'
+)
+declare -A APP_MATCH_PATTERN=(
+    [cliptoo]='cliptoo'
+    [kopia-ui]='/opt/KopiaUI/'
+)
+declare -A APP_COMMAND=(
+    [cliptoo]='/usr/local/bin/cliptoo'
+    [kopia-ui]='/opt/KopiaUI/kopia-ui'
+)
 APPS=(cliptoo kopia-ui)
 
 usage() {
@@ -71,31 +92,25 @@ chown_to_user() {
 }
 
 is_running() {
-    case "$1" in
-        cliptoo)  pgrep -u "$SESSION_USER" -x cliptoo >/dev/null 2>&1 ;;
-        kopia-ui) pgrep -u "$SESSION_USER" -f '/opt/KopiaUI/kopia-ui' >/dev/null 2>&1 ;;
-    esac
+    pgrep -u "$SESSION_USER" "${APP_MATCH_FLAG[$1]}" -- "${APP_MATCH_PATTERN[$1]}" >/dev/null 2>&1
 }
 
-# _stop <pkill match args...>
+# _stop <match flag> <match pattern>
 _stop() {
-    pkill -TERM -u "$SESSION_USER" "$@" 2>/dev/null || return 0
-    local i=0
-    while pgrep -u "$SESSION_USER" "$@" >/dev/null 2>&1; do
+    local flag="$1" pattern="$2" i=0
+    pkill -TERM -u "$SESSION_USER" "$flag" -- "$pattern" 2>/dev/null || return 0
+    while pgrep -u "$SESSION_USER" "$flag" -- "$pattern" >/dev/null 2>&1; do
         i=$((i + 1))
-        if [ "$i" -ge 50 ]; then
-            pkill -KILL -u "$SESSION_USER" "$@" 2>/dev/null || true
+        if [ "$i" -ge "$STOP_TRIES" ]; then
+            pkill -KILL -u "$SESSION_USER" "$flag" -- "$pattern" 2>/dev/null || true
             break
         fi
-        sleep 0.1
+        sleep "$STOP_INTERVAL"
     done
 }
 
 stop_app() {
-    case "$1" in
-        cliptoo)  _stop -x cliptoo ;;
-        kopia-ui) _stop -f '/opt/KopiaUI/' ;;
-    esac
+    _stop "${APP_MATCH_FLAG[$1]}" "${APP_MATCH_PATTERN[$1]}"
 }
 
 # _launch <binary> - detach the app into the user's graphical session.
@@ -118,33 +133,56 @@ _launch() {
 }
 
 start_app() {
-    case "$1" in
-        cliptoo)  _launch /usr/local/bin/cliptoo ;;
-        kopia-ui) _launch /opt/KopiaUI/kopia-ui ;;
-    esac
+    _launch "${APP_COMMAND[$1]}"
 }
 
-set_refresh() {
-    if [ ! -x "$REFRESH_SCRIPT" ]; then
-        log "refresh script not found: $REFRESH_SCRIPT"
-        return 0
-    fi
-    "$REFRESH_SCRIPT" "$1" || log "refresh switch to ${1}Hz failed"
+# current_mode - print the active DP-1 mode (e.g. 3840x2160@120), or nothing.
+current_mode() {
+    kscreen-doctor -o 2>/dev/null |
+        sed 's/\x1b\[[0-9;]*m//g' |
+        awk -v out="$OUTPUT" '
+            /^Output:/ { inblock = ($0 ~ (" " out " ")) }
+            inblock && match($0, /[0-9]+x[0-9]+@[0-9.]+\*/) {
+                tok = substr($0, RSTART, RLENGTH - 1)
+                split(tok, parts, "@")
+                printf "%s@%.0f\n", parts[1], parts[2]
+                exit
+            }
+        ' || true
+}
+
+# set_mode <WxH@R> - switch DP-1 to a mode; return non-zero on failure.
+set_mode() {
+    [ -n "$1" ] || return 1
+    kscreen-doctor output."$OUTPUT".mode."$1" && return 0
+    log "failed to set $OUTPUT mode to $1"
+    return 1
 }
 
 activate() {
-    set_refresh "$MODE_GAME"
-
-    local dir file app
+    local dir file prior app
     dir=$(state_dir)
-    file="$dir/active-apps"
+    file="$dir/state"
     mkdir -p "$dir"
     chown_to_user "$dir"
-    touch "$file"
+
+    if [ -f "$file" ]; then
+        log "already active; keeping recorded state"
+    else
+        prior=$(current_mode)
+        if [ -z "$prior" ]; then
+            prior="$MODE_IDLE"
+            log "could not read current $OUTPUT mode; recording fallback $prior"
+        fi
+        printf 'refresh=%s\n' "$prior" > "$file"
+        chown_to_user "$file"
+    fi
+
+    set_mode "$MODE_GAME" || true
 
     for app in "${APPS[@]}"; do
         is_running "$app" || continue
-        grep -qxF "$app" "$file" || printf '%s\n' "$app" >> "$file"
+        grep -qxF "app=$app" "$file" || printf 'app=%s\n' "$app" >> "$file"
         log "stopping $app"
         stop_app "$app"
     done
@@ -152,15 +190,33 @@ activate() {
 }
 
 deactivate() {
-    set_refresh "$MODE_IDLE"
-
-    local dir file app
+    local dir file mode app line
     dir=$(state_dir)
-    file="$dir/active-apps"
-    [ -f "$file" ] || return 0
+    file="$dir/state"
+    if [ ! -f "$file" ]; then
+        log "not active (no recorded state); nothing to restore"
+        return 0
+    fi
 
-    while IFS= read -r app; do
-        [ -n "$app" ] || continue
+    mode=""
+    while IFS= read -r line; do
+        case "$line" in
+            refresh=*) mode="${line#refresh=}" ;;
+        esac
+    done < "$file"
+
+    if [ -n "$mode" ] && set_mode "$mode"; then
+        log "restored $OUTPUT mode $mode"
+    else
+        log "could not restore mode '${mode:-unset}'; using fallback $MODE_IDLE"
+        set_mode "$MODE_IDLE" || true
+    fi
+
+    while IFS= read -r line; do
+        case "$line" in
+            app=*) app="${line#app=}" ;;
+            *) continue ;;
+        esac
         if is_running "$app"; then
             log "$app already running, skipping"
         else
@@ -168,6 +224,7 @@ deactivate() {
             start_app "$app"
         fi
     done < "$file"
+
     rm -f "$file"
 }
 
