@@ -7,8 +7,7 @@ A collection of scripts for maintaining an Arch-based (CachyOS) system and its g
 | Script | Type | Purpose |
 | --- | --- | --- |
 | `src/repository-clean.fish` | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
-| `src/git-maintenance.fish` | fish function | Safely optimize every git repo under a directory tree. |
-| `src/git-ignore-tidy.fish` | fish function | Report and untrack files that are both tracked and ignored. |
+| `src/git-maintenance.fish` | fish function | Safely optimize every git repo under a directory tree and untrack tracked+ignored files. |
 | `src/big-files.fish` | fish function | Report source files over 400 lines, grouped by project. |
 | `src/opencode-update.fish` | fish function | Update the opencode CLI and desktop AppImage. |
 | `src/install-apps.sh` | bash script | Install a fixed set of repo and AUR packages. |
@@ -58,9 +57,11 @@ repository-clean
 
 ## git-maintenance
 
-Safe git maintenance for every repository under a directory tree. By default it never touches the working tree: no `git clean`, no reflog expiry, no `--prune=now`, and never deletes branches, tags, stashes or remotes.
+Safe git maintenance for every repository under a directory tree. It never touches the working tree: no `git clean`, no reflog expiry, no `--prune=now`, and never deletes branches, tags, stashes or remotes.
 
 Each repo reports size before/after, loose→packed object counts, pruned remote refs, and the `fsck` result.
+
+It also untracks files that are both tracked and ignored (a tracked file listed in `.gitignore` is usually a mistake). Removal uses `git rm --cached`, keeping the file on disk and only stopping tracking; changes are staged, not committed. Submodule gitlinks are skipped. Under `-n` these files are reported but not untracked.
 
 ```sh
 git-maintenance                 # optimize all repos under /home/bubba/Projects
@@ -68,20 +69,6 @@ git-maintenance /some/dir       # optimize repos under a specific directory
 git-maintenance -b /some/dir    # same, via flag
 git-maintenance -n              # dry run: report stats, change nothing
 git-maintenance -a              # aggressive: --aggressive --prune=now (much slower)
-```
-
----
-
-## git-ignore-tidy
-
-Reports files that are both tracked and ignored (a tracked file listed in `.gitignore` is usually a mistake). Removal uses `git rm --cached`, keeping the file on disk; changes are staged, not committed. Submodule gitlinks are skipped.
-
-```sh
-git-ignore-tidy                 # scan all repos under /home/bubba/Projects
-git-ignore-tidy /some/dir       # scan a specific directory
-git-ignore-tidy -b /some/dir    # same, via flag
-git-ignore-tidy -n              # report only, never prompt or remove
-git-ignore-tidy -y              # untrack all matches without prompting
 ```
 
 ---

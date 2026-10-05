@@ -1,7 +1,12 @@
 # Safe git maintenance for every repo under a directory tree.
 #
-# By default it never touches the working tree, uses no `git clean`, no reflog
-# expiry, no `--prune=now`, and never deletes branches, tags, stashes or remotes.
+# It never touches the working tree, uses no `git clean`, no reflog expiry, no
+# `--prune=now`, and never deletes branches, tags, stashes or remotes.
+#
+# It also untracks files that are both tracked and ignored (a tracked file listed
+# in .gitignore is usually a mistake). Removal uses `git rm --cached`, which keeps
+# the file on disk and only stops tracking it; changes are staged, not committed.
+# Submodule gitlinks are never touched.
 #
 # Usage:
 #   git-maintenance                 # optimize all repos under /home/bubba/Projects
@@ -14,9 +19,9 @@
 #
 # Each repo reports: size before -> after (reclaimed), loose -> packed object
 # counts, stale remote refs pruned, and the fsck result. The final line totals
-# repos optimized/skipped and space reclaimed. In dry-run it instead totals the
-# projected reclaim: current object data minus a read-only simulated repack, which
-# accounts for loose objects, pack rebuilding and pruning.
+# repos optimized/skipped, space reclaimed and files untracked. In dry-run it
+# instead totals the projected reclaim: current object data minus a read-only
+# simulated repack, which accounts for loose objects, pack rebuilding and pruning.
 
 function __gm_human --description 'format a KiB value as human-readable'
     set -l kb $argv[1]
@@ -71,6 +76,8 @@ function git-maintenance --description 'Safely optimize all git repos under a di
     set -l skipped 0
     set -l reclaimed_kb 0
     set -l reclaimable_kb 0
+    set -l flagged 0
+    set -l untracked 0
     set -l seen
 
     for gitdir in (find "$base" -name .git -prune -print 2>/dev/null | sort)
@@ -114,6 +121,28 @@ function git-maintenance --description 'Safely optimize all git repos under a di
             echo "$gold !$off $name $gold(skip: $busy present)$off"
             set skipped (math $skipped + 1)
             continue
+        end
+
+        # Tracked files matched by the ignore rules, excluding submodule gitlinks.
+        set -l ignored_files
+        for f in (git -C "$repo" ls-files -z -ci --exclude-standard | string split0)
+            set -l entry (git -C "$repo" ls-files -s -z -- "$f" | string split0)
+            set -l mode (string match -r '^[0-9]+' -- $entry)
+            test "$mode" = 160000; and continue
+            set -a ignored_files "$f"
+        end
+        if test (count $ignored_files) -gt 0
+            set flagged (math $flagged + (count $ignored_files))
+            if test -n "$dry_run"
+                echo "$gold !$off $name $gold(tracked+ignored:"(count $ignored_files)" file(s))$off"
+                for f in $ignored_files
+                    echo "$dim        $f$off"
+                end
+            else
+                git -C "$repo" rm --cached --quiet -- $ignored_files
+                set untracked (math $untracked + (count $ignored_files))
+                echo "$dim    untracked "(count $ignored_files)" tracked+ignored file(s)$off"
+            end
         end
 
         # Stats before any mutation.
@@ -190,8 +219,13 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         set optimized (math $optimized + 1)
     end
 
+    if test $untracked -gt 0; and test -z "$dry_run"
+        echo
+        echo "$gold Changes are staged; commit each repo to apply.$off"
+    end
+
     set -l tail "reclaimed: "(__gm_human $reclaimed_kb)
     test -n "$dry_run"; and set tail "reclaimable (est.): "(__gm_human $reclaimable_kb)
     echo
-    echo $green"optimized: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail
+    echo $green"optimized: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail"   "$gold"tracked+ignored: "$off$flagged"   "$green"untracked: "$off$untracked
 end
