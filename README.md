@@ -153,15 +153,20 @@ Requires `kscreen-doctor`, `loginctl`, and `runuser` (util-Linux).
 Periodic maintenance for OpenCode:
 
 - Removes SQLite rows for project directories that no longer exist (which otherwise surface as "Failed to send prompt / Unable to retrieve session").
+- Optionally prunes sessions with no activity for a number of days (interactive `y/N` on a tty; `ASSUME_YES=1` for unattended).
 - Deletes `snapshot/<project-id>/` git dirs for projects no longer in the DB (revert snapshots; `global` is kept).
 - Rotates `~/.local/share/opencode/log/opencode.log`.
+- Prints a `summary` line with rows pruned, DB file size delta / reusable pages, snapshot and log bytes freed.
 
 A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes are skipped while OpenCode is running (snapshot/log cleanup still runs). Output is appended to `~/.local/state/opencode/maint/maint.log` and echoed to the terminal. Intended to run from a systemd user timer or cron.
+
+Set `DO_VACUUM=1` to run `VACUUM` on every run, compacting space freed by that run or earlier ones (slow on a multi-GiB DB).
 
 ```sh
 ./src/opencode-maintenance.sh                 # normal run
 DRY_RUN=1 ./src/opencode-maintenance.sh       # report what would be pruned, change nothing
 DEAD_GRACE_DAYS=0 ./src/opencode-maintenance.sh
+SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 ./src/opencode-maintenance.sh   # unattended age prune
 ```
 
-Tunables: `DEAD_GRACE_DAYS`, `LOG_MAX_MB`, `LOG_KEEP`, `DO_VACUUM`, `ROOTS`, `SNAP_DIR`.
+Tunables: `DEAD_GRACE_DAYS`, `SESSION_MAX_AGE_DAYS`, `SESSION_MAX_AGE_PROMPT_DAYS`, `ASSUME_YES`, `LOG_MAX_MB`, `LOG_KEEP`, `DO_VACUUM`, `ROOTS`, `SNAP_DIR`.
