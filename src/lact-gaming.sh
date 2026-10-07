@@ -56,19 +56,29 @@ log() { printf '%s lact-gaming: %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" >&2;
 setup_session_env() {
     [ "$(id -u)" -eq 0 ] || return 0
 
-    local uid session_type=""
+    local uid session_type="" s t seat active fallback=""
     uid=$(id -u "$SESSION_USER")
     export XDG_RUNTIME_DIR="/run/user/$uid"
     export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
-    # Pick the graphical session, skipping the user-manager session (type
-    # "unspecified"), which otherwise wins an alphabetical sort.
+    # Pick the graphical session. Require a seat so per-application scope
+    # sessions (seat=none, type inherited from the environment) are skipped,
+    # and prefer an active one; fall back to the first wayland/x11 session.
     while read -r s; do
         t=$(loginctl show-session "$s" -p Type --value 2>/dev/null || true)
         case "$t" in
-            wayland|x11) session_type="$t"; break ;;
+            wayland|x11) ;;
+            *) continue ;;
         esac
+        [ -n "$fallback" ] || fallback="$t"
+        seat=$(loginctl show-session "$s" -p Seat --value 2>/dev/null || true)
+        active=$(loginctl show-session "$s" -p Active --value 2>/dev/null || true)
+        if [ -n "$seat" ] && [ "$active" = "yes" ]; then
+            session_type="$t"
+            break
+        fi
     done < <(loginctl --no-legend list-sessions 2>/dev/null | awk -v u="$SESSION_USER" '$3 == u {print $1}')
+    [ -n "$session_type" ] || session_type="$fallback"
 
     case "$session_type" in
         wayland) export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" ;;
@@ -113,22 +123,46 @@ stop_app() {
     _stop "${APP_MATCH_FLAG[$1]}" "${APP_MATCH_PATTERN[$1]}"
 }
 
-# _launch <binary> - detach the app into the user's graphical session.
+# session_env_source - PID of a long-lived process carrying the desktop session
+# environment, or nothing. Login and per-app scope sessions do not expose it, so
+# read it from a desktop process instead.
+session_env_source() {
+    local cmd pid
+    for cmd in plasmashell kwin_wayland kwin_x11 ksmserver kded6; do
+        pid=$(pgrep -u "$SESSION_USER" -x "$cmd" 2>/dev/null | head -1) || true
+        if [ -n "$pid" ] && grep -qz '^XDG_CURRENT_DESKTOP=' "/proc/$pid/environ" 2>/dev/null; then
+            printf '%s\n' "$pid"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# _launch <binary> - detach the app into the user's graphical session, reusing
+# the desktop environment so toolkits load the KDE platform theme.
 _launch() {
-    local uid env_args
+    local uid src
+    local -a env_args=()
+
     uid=$(id -u "$SESSION_USER")
-    env_args=(
-        "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$uid}"
-        "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$uid/bus}"
-    )
-    [ -n "${DISPLAY:-}" ]          && env_args+=("DISPLAY=$DISPLAY")
-    [ -n "${WAYLAND_DISPLAY:-}" ]  && env_args+=("WAYLAND_DISPLAY=$WAYLAND_DISPLAY")
-    [ -n "${XDG_SESSION_TYPE:-}" ] && env_args+=("XDG_SESSION_TYPE=$XDG_SESSION_TYPE")
+
+    src=$(session_env_source || true)
+    if [ -n "$src" ]; then
+        mapfile -d '' -t env_args < "/proc/$src/environ" || true
+    else
+        env_args=(
+            "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$uid}"
+            "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$uid/bus}"
+        )
+        [ -n "${DISPLAY:-}" ]          && env_args+=("DISPLAY=$DISPLAY")
+        [ -n "${WAYLAND_DISPLAY:-}" ]  && env_args+=("WAYLAND_DISPLAY=$WAYLAND_DISPLAY")
+        [ -n "${XDG_SESSION_TYPE:-}" ] && env_args+=("XDG_SESSION_TYPE=$XDG_SESSION_TYPE")
+    fi
 
     if [ "$(id -u)" -eq 0 ]; then
-        runuser -u "$SESSION_USER" -- env "${env_args[@]}" setsid --fork "$1" >/dev/null 2>&1
+        runuser -u "$SESSION_USER" -- env -i "${env_args[@]}" setsid --fork "$1" >/dev/null 2>&1
     else
-        setsid --fork "$1" >/dev/null 2>&1
+        env -i "${env_args[@]}" setsid --fork "$1" >/dev/null 2>&1
     fi
 }
 

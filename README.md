@@ -127,7 +127,7 @@ LACT "Gaming" profile hook combining the refresh switch with parking lightweight
 - `on` — switch `DP-1` to 240Hz, record the refresh mode that was active beforehand, then stop any running `cliptoo` and KopiaUI (`/opt/KopiaUI/kopia-ui`) instances, recording which ones were running.
 - `off` — restore the recorded refresh mode (falling back to 120Hz if none was captured), then restart only the apps that were running at activation. State lives in `~/.local/state/lact-gaming/state`.
 
-Activation is idempotent: if the state file already exists (a previous `off` never fired), the recorded mode and apps are kept rather than overwritten, so a later `off` still restores them. The desktop refresh is managed directly with `kscreen-doctor`.
+Activation is idempotent: if the state file already exists (a previous `off` never fired), the recorded mode and apps are kept rather than overwritten, so a later `off` still restores them. The desktop refresh is managed directly with `kscreen-doctor`. Restored apps are relaunched with the full desktop session environment (read from a running Plasma process), so toolkits load the correct KDE theme.
 
 Designed to run as root from `lactd`; like `monitor-refresh.sh` it enters the session user's Wayland/X11 environment. Stop is graceful (`SIGTERM`, then `SIGKILL` after ~5s).
 
