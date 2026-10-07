@@ -14,6 +14,7 @@ A collection of scripts for maintaining an Arch-based (CachyOS) system and its g
 | `src/monitor-refresh.sh` | bash script | Switch the DP-1 monitor refresh rate (LACT profile hook). |
 | `src/lact-gaming.sh` | bash script | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
 | `src/opencode-maintenance.sh` | bash script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
+| `src/health-check.sh` | bash script | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
 
 ## Install
 
@@ -170,3 +171,30 @@ SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 ./src/opencode-maintenance.sh   # unattende
 ```
 
 Tunables: `DEAD_GRACE_DAYS`, `SESSION_MAX_AGE_DAYS`, `SESSION_MAX_AGE_PROMPT_DAYS`, `ASSUME_YES`, `LOG_MAX_MB`, `LOG_KEEP`, `DO_VACUUM`, `ROOTS`, `SNAP_DIR`.
+
+---
+
+## health-check
+
+Read-only report of potential system-wide issues. Signal-only: it prints a section only when a check finds something, filters known-benign log/package noise, and exits non-zero when any issue group is found (handy for a timer/cron).
+
+Checks:
+
+- **Failed units** — failed system and user systemd units.
+- **Packaging** — `pacman -Dk` database errors, `pacman -Qkq` missing package files (expected runtime paths filtered), `pacman -Qtdq` true orphans, and `paccheck --md5sum --files --quiet` when `pacutils` is installed.
+- **Logs** — priority-`err` journal lines for the current boot, kernel-only `err` lines, and `dmesg --level=err,warn`.
+- **Btrfs** — `device stats` error counters and `scrub status -R` per detected filesystem.
+- **SMART** — health verdict plus critical attributes per detected disk.
+
+Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and are counted as skipped otherwise, so the report still runs unprivileged.
+
+```sh
+./src/health-check.sh              # full report (only findings shown)
+./src/health-check.sh -q           # skip the paccheck md5sum sweep
+./src/health-check.sh -v           # verbose: raw output, no noise filter
+./src/health-check.sh --no-sudo    # skip privileged checks
+```
+
+Suppressed patterns are extended regexes: built-in defaults plus any lines in `~/.config/health-check/ignore` (override with `HEALTH_CHECK_IGNORE`). Run with `-v` to see the unfiltered output before adding a pattern.
+
+Requires `systemctl`, `journalctl`, `pacman`. Optional: `paccheck` (pacutils), `btrfs-progs`, `smartmontools`. Btrfs mounts and block devices are auto-detected; override with `BTRFS_MOUNTS` / `SMART_DEVICES`. `MAX_LINES` (default 25) caps lines shown per findings list.
