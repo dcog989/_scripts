@@ -6,9 +6,9 @@
 # activates and "off" when it deactivates. When executed as root
 # (lactd), it picks up the desktop session environment automatically.
 #
-# Usage:  refresh.sh 240   -> switch to 240Hz
-#         refresh.sh 120   -> switch to 120Hz
-#         refresh.sh       -> print the current refresh rate
+# Usage:  monitor-refresh.sh 240   -> switch to 240Hz
+#         monitor-refresh.sh 120   -> switch to 120Hz
+#         monitor-refresh.sh       -> print the current refresh rate
 #
 set -euo pipefail
 

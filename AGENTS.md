@@ -10,12 +10,15 @@
 
 All scripts live in `src/`:
 
-- `src/repoclean.fish` — list then clean pacman/AUR package leftovers (orphans, caches, unneeded deps).
-- `src/git-maintenance.fish` — safely optimize every git repo under a directory tree.
-- `src/git-ignore-tidy.fish` — report and untrack files that are both tracked and ignored.
-- `src/update-opencode.fish` — update the opencode CLI and desktop AppImage.
+- `src/repository-clean.fish` — list then clean pacman/AUR package leftovers (orphans, caches, unneeded deps).
+- `src/git-maintenance.fish` — safely optimize every git repo under a directory tree; untrack tracked+ignored files.
+- `src/big-files.fish` — report source files over 400 lines, grouped by project.
+- `src/opencode-update.fish` — update the opencode CLI and desktop AppImage.
 - `src/install-apps.sh` — install a fixed set of repo and AUR packages.
-- `src/refresh.sh` — print or switch the DP-1 monitor refresh rate (LACT profile hook).
+- `src/monitor-refresh.sh` — switch the DP-1 monitor refresh rate (LACT profile hook).
+- `src/lact-gaming.sh` — LACT Gaming hook: switch refresh rate and park/restore tray apps.
+- `src/opencode-maintenance.sh` — prune OpenCode DB rows/snapshots for dead projects, rotate its log.
+- `src/health-check.sh` — read-only report of system-wide issues (units, packages, logs, Btrfs, SMART).
 - `README.md` — usage and overview.
 
 ## Workflow
@@ -43,7 +46,7 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 
 - Keep modifications minimal and scoped; prefer incremental improvements over rewrites. Ask before architectural changes.
 - New scripts go in `src/` and follow the existing header-comment style (purpose + usage).
-- Use explicit variable names; avoid magic numbers (e.g. repoclean cache keep-count `3` is a documented constant).
+- Use explicit variable names; avoid magic numbers (e.g. repository-clean cache keep-count `3` is a documented constant).
 - Return explicit error types; do not suppress errors. Guard external command failures (e.g. missing AUR helper).
 - Follow repository `.editorconfig` (fish and shell files use 2-space indent).
 - Run the matching syntax check after edits (see Verification).
