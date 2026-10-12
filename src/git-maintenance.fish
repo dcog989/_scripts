@@ -18,10 +18,12 @@
 #                                   # (much slower; drops the recovery grace period)
 #
 # Each repo reports: size before -> after (reclaimed), loose -> packed object
-# counts, stale remote refs pruned, and the fsck result. The final line totals
-# repos optimized/skipped, space reclaimed and files untracked. In dry-run it
-# instead totals the projected reclaim: current object data minus a read-only
-# simulated repack, which accounts for loose objects, pack rebuilding and pruning.
+# counts, stale remote refs pruned, and the fsck result. The summary totals
+# repos optimized/skipped, space reclaimed and remote refs pruned, then lists
+# every tracked+ignored file (as repo/path) and any repo with fsck errors. In
+# dry-run it instead totals the projected reclaim: current object data minus a
+# read-only simulated repack, which accounts for loose objects, pack rebuilding
+# and pruning.
 
 function __gm_human --description 'format a KiB value as human-readable'
     set -l kb $argv[1]
@@ -76,8 +78,10 @@ function git-maintenance --description 'Safely optimize all git repos under a di
     set -l skipped 0
     set -l reclaimed_kb 0
     set -l reclaimable_kb 0
-    set -l flagged 0
-    set -l untracked 0
+    set -l flagged_repos
+    set -l flagged_files
+    set -l fsck_error_repos
+    set -l pruned_total 0
     set -l seen
 
     for gitdir in (find "$base" -name .git -prune -print 2>/dev/null | sort)
@@ -132,16 +136,14 @@ function git-maintenance --description 'Safely optimize all git repos under a di
             set -a ignored_files "$f"
         end
         if test (count $ignored_files) -gt 0
-            set flagged (math $flagged + (count $ignored_files))
-            if test -n "$dry_run"
-                echo "$gold !$off $name $gold(tracked+ignored:"(count $ignored_files)" file(s))$off"
-                for f in $ignored_files
-                    echo "$dim        $f$off"
-                end
-            else
+            set -a flagged_repos "$name"
+            if test -z "$dry_run"
                 git -C "$repo" rm --cached --quiet -- $ignored_files
-                set untracked (math $untracked + (count $ignored_files))
-                echo "$dim    untracked "(count $ignored_files)" tracked+ignored file(s)$off"
+            end
+            echo "$gold !$off $name $gold(tracked+ignored:"(count $ignored_files)" file(s))$off"
+            for f in $ignored_files
+                set -a flagged_files "$name/$f"
+                echo "$dim        $f$off"
             end
         end
 
@@ -187,6 +189,7 @@ function git-maintenance --description 'Safely optimize all git repos under a di
             set -l pout (env GIT_TERMINAL_PROMPT=0 git -C "$repo" remote prune "$remote" 2>&1)
             set pruned (math $pruned + (count (string match -r '\[pruned\]' -- $pout)))
         end
+        set pruned_total (math $pruned_total + $pruned)
         git -C "$repo" worktree prune >/dev/null 2>&1
         git -C "$repo" gc $gc_flags
         git -C "$repo" commit-graph write --reachable >/dev/null 2>&1
@@ -198,6 +201,7 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         set -l fsck_state
         if test (count (string match -r 'error:|fatal:|missing' -- $fsck_out)) -gt 0
             set fsck_state "$red fsck:ERRORS$off"
+            set -a fsck_error_repos "$name"
         else if test $dangling -gt 0
             set fsck_state "fsck:ok ($dangling dangling)"
         else
@@ -219,13 +223,27 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         set optimized (math $optimized + 1)
     end
 
-    if test $untracked -gt 0; and test -z "$dry_run"
-        echo
-        echo "$gold Changes are staged; commit each repo to apply.$off"
-    end
-
     set -l tail "reclaimed: "(__gm_human $reclaimed_kb)
     test -n "$dry_run"; and set tail "reclaimable (est.): "(__gm_human $reclaimable_kb)
     echo
-    echo $green"optimized: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail"   "$gold"tracked+ignored: "$off$flagged"   "$green"untracked: "$off$untracked
+    echo $green"optimized: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail
+    test $pruned_total -gt 0; and echo $dim"remote refs pruned: "$off$pruned_total
+
+    set -l untrack_state "staged for untracking; commit each repo to apply"
+    test -n "$dry_run"; and set untrack_state "dry run: left tracked"
+    if test (count $flagged_files) -gt 0
+        echo $gold"tracked+ignored: "(count $flagged_files)" file(s) in "(count $flagged_repos)" repo(s) "$dim"($untrack_state)"$off
+        for f in $flagged_files
+            echo $dim"    "$f$off
+        end
+    else
+        echo $dim"tracked+ignored: none"$off
+    end
+
+    if test (count $fsck_error_repos) -gt 0
+        echo $red"fsck errors: "(count $fsck_error_repos)" repo(s)"$off
+        for r in $fsck_error_repos
+            echo $dim"    "$r$off
+        end
+    end
 end
