@@ -3,9 +3,9 @@
 # lact-gaming.sh - LACT "Gaming" profile hook: switch the DP-1 refresh rate and
 # park clipboard/backup tray apps while a game is running.
 #
-# On activation the monitor drops to its game mode, the refresh mode active
-# beforehand is recorded, and any running cliptoo / KopiaUI instances are
-# recorded (so they can be restored later) then stopped. On deactivation the
+# On activation the refresh mode active beforehand is recorded, any running
+# cliptoo / KopiaUI instances are recorded (so they can be restored later) then
+# stopped, and finally the monitor drops to its game mode. On deactivation the
 # monitor returns to the recorded mode and only the apps that were running at
 # activation are started again.
 #
@@ -212,8 +212,6 @@ activate() {
         chown_to_user "$file"
     fi
 
-    set_mode "$MODE_GAME" || true
-
     for app in "${APPS[@]}"; do
         is_running "$app" || continue
         grep -qxF "app=$app" "$file" || printf 'app=%s\n' "$app" >> "$file"
@@ -221,6 +219,9 @@ activate() {
         stop_app "$app"
     done
     chown_to_user "$file"
+
+    # After the stops: a modeset under a running Chromium kills its GPU process.
+    set_mode "$MODE_GAME" || true
 }
 
 deactivate() {
