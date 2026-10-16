@@ -7,10 +7,13 @@
 #  1. Prune OpenCode SQLite rows whose project directory no longer exists
 #     (prevents "Failed to send prompt / Unable to retrieve session").
 #     A path must be missing for DEAD_GRACE_DAYS before it is pruned.
-#  2. Optionally prune sessions with no activity for SESSION_MAX_AGE_DAYS
+#  2. Drop the frozen legacy session/message/part rows that OpenCode migrated
+#     to session_v2/session_message (only rows mirrored in session_v2).
+#  3. Optionally prune sessions with no activity for SESSION_MAX_AGE_DAYS
 #     (interactive y/N when run on a tty; ASSUME_YES=1 for unattended).
-#  3. Delete snapshot/<project-id>/ git dirs for projects no longer in the DB.
-#  4. Rotate/truncate opencode.log when it grows past LOG_MAX_MB.
+#  4. Delete snapshot/<project-id>/ git dirs for projects no longer in the DB.
+#  5. Rotate/truncate opencode.log when it grows past LOG_MAX_MB.
+#  6. VACUUM the DB.
 #
 # Safe from cron / systemd --user. All filesystem/DB writes are skipped while
 # OpenCode is running.
@@ -22,7 +25,7 @@
 #   ASSUME_YES=0        set 1 to skip the interactive age-prune confirmation
 #   LOG_MAX_MB=50       rotate the log above this size (0 disables)
 #   LOG_KEEP=3          number of .gz archives to keep
-#   DO_VACUUM=0         set 1 to VACUUM the DB each run (slow)
+#   DO_VACUUM=1         VACUUM the DB each run (set 0 to skip; needs OpenCode closed)
 #   ROOTS=...           space-separated whitelist of path roots
 #   SNAP_DIR=...        snapshot store (default $OC_DIR/snapshot)
 set -euo pipefail
@@ -41,7 +44,7 @@ SESSION_MAX_AGE_PROMPT_DAYS="${SESSION_MAX_AGE_PROMPT_DAYS:-60}"
 ASSUME_YES="${ASSUME_YES:-0}"
 LOG_MAX_MB="${LOG_MAX_MB:-50}"
 LOG_KEEP="${LOG_KEEP:-3}"
-DO_VACUUM="${DO_VACUUM:-0}"
+DO_VACUUM="${DO_VACUUM:-1}"
 DRY_RUN="${DRY_RUN:-0}"
 ROOTS=(${ROOTS:-"$HOME/Projects"})
 
@@ -103,7 +106,7 @@ if oc_running; then log "OpenCode running - skipping DB prune"; skip_db=1; fi
 tmp=$(mktemp); ripe=$(mktemp); newstate=$(mktemp)
 trap 'rm -f "$tmp" "$ripe" "$newstate"' EXIT
 
-for pair in "session directory" "project worktree" "project_directory directory" "workspace directory"; do
+for pair in "session directory" "session_v2 directory" "project worktree" "project_directory directory" "workspace directory"; do
   set -- $pair
   sqlite3 "$DB" "SELECT DISTINCT $2 FROM $1 WHERE $2 IS NOT NULL AND $2<>'';" |
   while IFS= read -r d; do
@@ -155,21 +158,23 @@ con = sqlite3.connect(db)
 con.execute("PRAGMA foreign_keys=ON")
 con.execute("BEGIN")
 def count(t): return con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
-before = {t: count(t) for t in ("message", "part")}
+before = {t: count(t) for t in ("session_v2", "session_message", "message", "part")}
 def run(s): return con.execute(s, paths).rowcount
 n1 = run(f"DELETE FROM session           WHERE directory IN ({q})")
-n2 = run(f"DELETE FROM project_directory WHERE directory IN ({q})")
-n3 = run(f"DELETE FROM workspace         WHERE directory IN ({q})")
-n4 = run(f"""DELETE FROM project
+n2 = run(f"DELETE FROM session_v2        WHERE directory IN ({q})")
+n3 = run(f"DELETE FROM project_directory WHERE directory IN ({q})")
+n4 = run(f"DELETE FROM workspace         WHERE directory IN ({q})")
+n5 = run(f"""DELETE FROM project
              WHERE worktree IN ({q})
-               AND id NOT IN (SELECT DISTINCT project_id FROM session)""")
-after = {t: count(t) for t in ("message", "part")}
+               AND id NOT IN (SELECT DISTINCT project_id FROM session
+                              UNION SELECT DISTINCT project_id FROM session_v2)""")
+after = {t: count(t) for t in ("session_v2", "session_message", "message", "part")}
 con.commit()
 ps = con.execute("PRAGMA page_size").fetchone()[0]
 reclaim = con.execute("PRAGMA freelist_count").fetchone()[0] * ps
 con.execute("PRAGMA optimize")
-print(f"deleted sessions={n1} project_directory={n2} workspace={n3} projects={n4}")
-print(f"cascaded messages={before['message']-after['message']} parts={before['part']-after['part']}")
+print(f"deleted sessions={n1} sessions_v2={n2} project_directory={n3} workspace={n4} projects={n5}")
+print("cascaded " + " ".join(f"{t}={before[t]-after[t]}" for t in before))
 print(f"reclaim={reclaim}")
 con.close()
 PY
@@ -181,6 +186,26 @@ PY
       NR==FNR { dead[$1]=1; next }
       !($1 in dead)' "$ripe" "$STATE_FILE" > "$STATE_FILE.new" && mv "$STATE_FILE.new" "$STATE_FILE"
     log "db prune complete"
+  fi
+fi
+
+# --------------------------------------------------------------- legacy tables
+# OpenCode migrated session/message/part to session_v2/session_message; the old
+# tables are frozen mirrors. Only rows also in session_v2 are dropped, so no
+# history is lost; the FK cascade clears their message/part rows.
+if [ "$skip_db" = 0 ]; then
+  n_mirror=$(sqlite3 "$DB" "SELECT count(*) FROM session WHERE id IN (SELECT id FROM session_v2);")
+  if [ "$n_mirror" -gt 0 ]; then
+    if [ "$DRY_RUN" = "1" ]; then
+      log "DRY RUN - would drop $n_mirror legacy session rows mirrored in session_v2"
+    else
+      sqlite3 "$DB" "PRAGMA foreign_keys=ON; DELETE FROM session WHERE id IN (SELECT id FROM session_v2);"
+      ps=$(sqlite3 "$DB" "PRAGMA page_size;")
+      db_reclaim=$(( db_reclaim + $(sqlite3 "$DB" "PRAGMA freelist_count;") * ps ))
+      log "legacy prune: dropped $n_mirror mirrored session rows; $(sqlite3 "$DB" "SELECT count(*) FROM session;") legacy sessions left"
+    fi
+  else
+    log "no legacy session rows to drop"
   fi
 fi
 
@@ -209,7 +234,7 @@ if [ "$skip_db" = 0 ]; then
   if [ "$age_days" -gt 0 ] 2>/dev/null; then
     now=$(date +%s)
     cutoff_ms=$(( (now - age_days * 86400) * 1000 ))
-    n_old=$(sqlite3 "$DB" "SELECT count(*) FROM session WHERE time_updated <= $cutoff_ms;")
+    n_old=$(sqlite3 "$DB" "SELECT count(*) FROM session_v2 WHERE time_updated <= $cutoff_ms;")
     log "sessions inactive >${age_days}d: $n_old"
     if [ "$n_old" -gt 0 ]; then
       if [ "$DRY_RUN" = "1" ]; then
@@ -233,10 +258,11 @@ db, cutoff = sys.argv[1], int(sys.argv[2])
 con = sqlite3.connect(db)
 con.execute("PRAGMA foreign_keys=ON")
 con.execute("BEGIN")
-tables = ("session", "message", "part")
+tables = ("session_v2", "session", "session_message", "message", "part")
 def count(t): return con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
 before = {t: count(t) for t in tables}
-con.execute("DELETE FROM session WHERE time_updated <= ?", (cutoff,))
+con.execute("DELETE FROM session_v2 WHERE time_updated <= ?", (cutoff,))
+con.execute("DELETE FROM session    WHERE time_updated <= ?", (cutoff,))
 con.commit()
 after = {t: count(t) for t in tables}
 ps = con.execute("PRAGMA page_size").fetchone()[0]
@@ -257,10 +283,12 @@ PY
 fi
 
 # ------------------------------------------------------------------ vacuum
-# Runs on request even when nothing was pruned, so freed/reusable pages from
-# earlier runs are compacted in one go.
-if [ "$DO_VACUUM" = "1" ] && [ "$skip_db" = 0 ]; then
-  if [ "$DRY_RUN" = "1" ]; then
+# On by default. Runs even when nothing was pruned, so freed/reusable pages
+# from earlier runs are compacted in one go.
+if [ "$DO_VACUUM" = "1" ]; then
+  if [ "$skip_db" = 1 ]; then
+    log "VACUUM skipped - OpenCode running (needs an exclusive lock)"
+  elif [ "$DRY_RUN" = "1" ]; then
     log "DRY RUN - would VACUUM $DB"
   elif sqlite3 "$DB" "VACUUM;"; then
     log "VACUUM complete"
