@@ -4,7 +4,7 @@
 
 - Name: scripts
 - Description: Collection of fish functions and shell scripts for maintaining an Arch-based (CachyOS) system and its git repositories.
-- Tech: fish shell, bash, pacman/paccache, yay/paru (AUR), git, jq, curl, kscreen-doctor.
+- Tech: fish shell, bash, pacman/paccache, yay (AUR), git, jq, curl, kscreen-doctor.
 
 ## Key Files
 
@@ -42,29 +42,11 @@ The form follows purpose, not language preference:
 
 When adding a script, pick the form from this rule. Don't convert a working script for consistency alone; the boundary is intentional.
 
-### Code Changes
-
-- Keep modifications minimal and scoped; prefer incremental improvements over rewrites. Ask before architectural changes.
-- New scripts go in `src/` and follow the existing header-comment style (purpose + usage).
-- Use explicit variable names; avoid magic numbers (e.g. repository-clean cache keep-count `3` is a documented constant).
-- Return explicit error types; do not suppress errors. Guard external command failures (e.g. missing AUR helper).
-- Follow repository `.editorconfig` (fish and shell files use 2-space indent).
-- Run the matching syntax check after edits (see Verification).
-- Self-documenting code via clear naming. Use comments only for complex workarounds — why, not what.
-- Never run git mutations (commit, push, reset, rebase, amend) unless explicitly instructed.
-- Do not create documentation files unless explicitly requested. Update `README.md` when adding a script.
-
 ### Verification
 
 - After editing a fish file, run `fish -n src/<name>.fish` to confirm it parses.
 - After editing a shell script, run `bash -n src/<name>.sh` to confirm it parses.
 - Do not run destructive scripts in destructive mode during development unless the user asks.
-
-## Dev Environment
-
-- CachyOS, KDE Plasma 6, Wayland, Btrfs.
-- fish shell, Ghostty terminal, Fresh TUI editor, yay package manager, bun npm manager, Firefox, and Zed code editor.
-- All software is up to date as of today.
 
 ## File System Access
 
@@ -78,7 +60,7 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 
 - No automated tests. Validate via syntax checks (`fish -n`, `bash -n`) and manual dry-run review.
 - Prefer scripts' built-in dry-run/`-n` paths when reviewing behavior.
-- Do not create test files for trivial changes.
+- Do not create test files for trivial changes, or for behavior that is not reliably unit-testable in the test environment (e.g. UI layout/click mapping). Prefer no new files; only add a test when the logic is genuinely testable and worth guarding.
 
 ## Common Patterns
 
@@ -88,17 +70,45 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 - Skip repos with in-progress operations or locks (`index.lock`, `MERGE_HEAD`, rebase markers, …).
 - Surface intentional defaults (keep-count, prune behavior) in dry-run output.
 
-## Communication Style
+---
+
+## General Guidelines
+
+### Code Changes
+
+- For non-trivial work, propose an approach and confirm before implementing.
+- Keep modifications minimal and scoped; prefer incremental improvements over rewrites. Ask before architectural changes.
+- Use explicit types and named constants (no magic numbers).
+- Return explicit error types; do not suppress exceptions.
+- Follow standard repository linting and formatting configs.
+- Decompose files over 400 lines if they mix concerns.
+- Use clear naming over comments; reserve comments for complex workarounds or non-obvious issues — why, not what.
+- Never run git mutations (commit, push, reset, rebase, amend) unless explicitly instructed.
+- Do not create documentation files unless explicitly requested.
+
+### Author Environment
+
+- CachyOS, KDE Plasma 6, Wayland, Btrfs.
+- fish shell, Ghostty terminal, Fresh TUI editor, yay package manager, bun npm manager, Firefox, and Zed code editor.
+
+### Definition of Done
+
+- Logic fully implemented.
+- README.md + AGENTS.md updated as needed.
+- Print a concise conventional commit message in a fenced code block, see below.
+
+### Commit Messages
+
+- On completion of an update or fix, print a conventional commit message in a fenced code block.
+- Add a body only when the "why" isn't obvious.
+- Do not wrap lines. One physical line per paragraph however long it gets. Never hard-wrap the subject or the body.
+
+### Communication Style
 
 - Provide concise, actionable responses.
+- Answer in the fewest words that fully answer. No preamble, no restating the request, no summary of what you just did, no tables unless asked for.
 - Ask clarifying questions when requirements are ambiguous.
 - Flag potential risks or edge cases proactively.
 - Do not pretend to understand how the user feels.
-- Never editorialise your answer. No "to be honest", "honestly", hedging, disclaimers, or meta-commentary — just answer.
-
-## Definition of Done
-
-- Logic fully implemented.
-- `README.md` updated if public interfaces changed or a script was added/removed.
-- Syntax checks pass for every changed script.
-- On completion of an update or fix, print a concise conventional commit message in a fenced code block.
+- Never editorialise your answer. No "honest answer", hedging, disclaimers, or meta-commentary — just answer.
+- Never end with "want me to…?" or a list of options unless a real decision is needed. If nothing is needed, end.
