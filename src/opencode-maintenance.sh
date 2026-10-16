@@ -9,25 +9,34 @@
 #     A path must be missing for DEAD_GRACE_DAYS before it is pruned.
 #  2. Drop the frozen legacy session/message/part rows that OpenCode migrated
 #     to session_v2/session_message (only rows mirrored in session_v2).
-#  3. Optionally prune sessions with no activity for SESSION_MAX_AGE_DAYS
-#     (interactive y/N when run on a tty; ASSUME_YES=1 for unattended).
-#  4. Delete snapshot/<project-id>/ git dirs for projects no longer in the DB.
-#  5. Rotate/truncate opencode.log when it grows past LOG_MAX_MB.
-#  6. VACUUM the DB.
+#  3. Back up the DB (gzipped) to ~/Downloads before anything is written.
+#  4. Optionally prune sessions with no activity for SESSION_MAX_AGE_DAYS.
+#  5. Delete snapshot/<project-id>/ git dirs for projects no longer in the DB.
+#  6. Rotate/truncate opencode.log when it grows past LOG_MAX_MB.
+#  7. VACUUM the DB.
+#
+# Run from a terminal it asks four questions up front (backup, dead-path grace,
+# session age, VACUUM) and Enter accepts the default. With no tty - cron or
+# systemd --user - it runs unattended: VACUUM on, backup off, no age prune
+# unless SESSION_MAX_AGE_DAYS is set. Every variable below still overrides its
+# prompt, so a timer can pin any choice.
 #
 # Safe from cron / systemd --user. All filesystem/DB writes are skipped while
 # OpenCode is running.
 #
-# Tunables (env):
+# Overrides (env):
+#   BACKUP=1            back up the DB first (interactive default; off unattended)
+#   BACKUP_DIR=$HOME/Downloads   where backups go
+#   BACKUP_KEEP=3       gzipped backups to keep, oldest removed
 #   DEAD_GRACE_DAYS=7   days a path must stay missing before pruning
-#   SESSION_MAX_AGE_DAYS  inactive days before a session is eligible; unset asks
-#                       interactively (default prompt 60d), 0 disables age prune
-#   ASSUME_YES=0        set 1 to skip the interactive age-prune confirmation
+#   SESSION_MAX_AGE_DAYS=0  inactive days before a session is eligible (0 = off)
+#   ASSUME_YES=0        set 1 to delete ripe sessions without confirming
 #   LOG_MAX_MB=50       rotate the log above this size (0 disables)
 #   LOG_KEEP=3          number of .gz archives to keep
-#   DO_VACUUM=1         VACUUM the DB each run (set 0 to skip; needs OpenCode closed)
+#   DO_VACUUM=1         VACUUM the DB each run (0 = skip; needs OpenCode closed)
 #   ROOTS=...           space-separated whitelist of path roots
 #   SNAP_DIR=...        snapshot store (default $OC_DIR/snapshot)
+#   DRY_RUN=1           report only, never prompts
 set -euo pipefail
 
 OC_DIR="${OC_DIR:-$HOME/.local/share/opencode}"
@@ -38,13 +47,17 @@ STATE_DIR="${OC_STATE:-$HOME/.local/state/opencode}/maintenance"
 STATE_FILE="$STATE_DIR/dead_paths.tsv"
 MAINT_LOG="$STATE_DIR/maintenance.log"
 
-DEAD_GRACE_DAYS="${DEAD_GRACE_DAYS:-7}"
+# Prompt-backed settings start empty so the choices block can tell "unset" from
+# "chosen"; the rest have fixed defaults.
+DEAD_GRACE_DAYS="${DEAD_GRACE_DAYS:-}"
 SESSION_MAX_AGE_DAYS="${SESSION_MAX_AGE_DAYS:-}"
-SESSION_MAX_AGE_PROMPT_DAYS="${SESSION_MAX_AGE_PROMPT_DAYS:-60}"
+DO_VACUUM="${DO_VACUUM:-}"
+BACKUP="${BACKUP:-}"
 ASSUME_YES="${ASSUME_YES:-0}"
 LOG_MAX_MB="${LOG_MAX_MB:-50}"
 LOG_KEEP="${LOG_KEEP:-3}"
-DO_VACUUM="${DO_VACUUM:-1}"
+BACKUP_DIR="${BACKUP_DIR:-$HOME/Downloads}"
+BACKUP_KEEP="${BACKUP_KEEP:-3}"
 DRY_RUN="${DRY_RUN:-0}"
 ROOTS=(${ROOTS:-"$HOME/Projects"})
 
@@ -56,12 +69,55 @@ log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*"; }
 hr() { awk -v b="${1:-0}" 'BEGIN{split("B KiB MiB GiB TiB",u," ");i=1;while(b>=1024&&i<5){b/=1024;i++}printf (i==1?"%d %s":"%.1f %s"),b,u[i]}'; }
 dir_bytes() { du -sb -- "$1" 2>/dev/null | cut -f1; }
 
+ask_num() {  # ask_num VAR label default
+  local v
+  while :; do
+    printf '%s [%s] ' "$2" "$3"
+    read -r v || v=""
+    v="${v:-$3}"
+    case "$v" in *[!0-9]*) printf '  whole number, please\n';; *) break;; esac
+  done
+  printf -v "$1" '%s' "$v"
+}
+
+ask_yn() {  # ask_yn VAR label default(y/n)
+  local v="" d="${3:-y}" hint
+  case "$d" in y|Y|yes|YES) hint="Y/n";; *) hint="y/N";; esac
+  printf '%s [%s] ' "$2" "$hint"
+  read -r v || v=""
+  case "${v:-$d}" in y|Y|yes|YES) printf -v "$1" 1;; *) printf -v "$1" 0;; esac
+}
+
+backup_db() {
+  local tmp="$TMPD/backup.db" dest old
+  dest="$BACKUP_DIR/opencode-db-$(date +%Y%m%d-%H%M%S).db.gz"
+  if ! sqlite3 "$DB" ".backup '$tmp'"; then
+    log "backup failed - aborting before any write"
+    exit 1
+  fi
+  if ! gzip -c "$tmp" > "$dest"; then
+    rm -f "$dest"
+    log "backup failed - no space in $BACKUP_DIR? aborting before any write"
+    exit 1
+  fi
+  log "backup: $dest ($(hr "$(stat -c %s "$dest")"))"
+  while IFS= read -r old; do
+    rm -f -- "$old"; log "backup: removed old $(basename "$old")"
+  done < <(ls -1t "$BACKUP_DIR"/opencode-db-*.db.gz 2>/dev/null | tail -n +$(( BACKUP_KEEP + 1 )))
+}
+
 db_size_before=0 db_size_after=0
 db_reclaim=0 snap_bytes=0 log_bytes=0
 
 # single instance
 exec 9>"$STATE_DIR/.lock"
 flock -n 9 || { log "another run in progress"; exit 0; }
+
+# scratch space for the pre-write DB copy and the prune lists; cleared on exit,
+# including Ctrl-C, but deliberately not /tmp - that is tmpfs here and the copy
+# is DB-sized.
+TMPD=$(mktemp -d -p "$STATE_DIR" maint.XXXXXX)
+trap 'rm -rf "$TMPD"' EXIT
 
 oc_running() {
   pgrep -af 'opencode-desktop|ai\.opencode\.desktop|/bin/opencode( |$)|opencode serve' >/dev/null
@@ -74,6 +130,27 @@ under_roots() {
   done
   return 1
 }
+
+# ------------------------------------------------------------------- choices
+if [ -t 0 ] && [ "$DRY_RUN" != "1" ]; then
+  if oc_running; then log "warning: OpenCode is running - DB backup, prune and VACUUM will be skipped"; fi
+  [ -n "$BACKUP" ] || ask_yn BACKUP "Back up the DB to $BACKUP_DIR (keep $BACKUP_KEEP)" y
+  [ -n "$DEAD_GRACE_DAYS" ] || ask_num DEAD_GRACE_DAYS "Days a missing project path must stay gone before pruning" 7
+  [ -n "$SESSION_MAX_AGE_DAYS" ] || ask_num SESSION_MAX_AGE_DAYS "Prune sessions inactive longer than (days, 0 = never)" 60
+  [ -n "$DO_VACUUM" ] || ask_yn DO_VACUUM "VACUUM the DB at the end" y
+fi
+# Unattended defaults; a dry run mirrors the interactive ones so it still shows
+# the full plan.
+if [ "$DRY_RUN" = "1" ]; then
+  BACKUP="${BACKUP:-1}"
+  SESSION_MAX_AGE_DAYS="${SESSION_MAX_AGE_DAYS:-60}"
+else
+  BACKUP="${BACKUP:-0}"
+  SESSION_MAX_AGE_DAYS="${SESSION_MAX_AGE_DAYS:-0}"
+fi
+DEAD_GRACE_DAYS="${DEAD_GRACE_DAYS:-7}"
+DO_VACUUM="${DO_VACUUM:-1}"
+log "choices: backup=$BACKUP grace=${DEAD_GRACE_DAYS}d age-prune=${SESSION_MAX_AGE_DAYS}d vacuum=$DO_VACUUM"
 
 # ------------------------------------------------------------------ log rotation
 if [ "$LOG_MAX_MB" -gt 0 ] && [ -f "$LOG" ]; then
@@ -103,11 +180,24 @@ db_size_before=$(stat -c %s "$DB")
 skip_db=0
 if oc_running; then log "OpenCode running - skipping DB prune"; skip_db=1; fi
 
-tmp=$(mktemp); ripe=$(mktemp); newstate=$(mktemp)
-trap 'rm -f "$tmp" "$ripe" "$newstate"' EXIT
+# ---------------------------------------------------------------- db backup
+if [ "$BACKUP" = "1" ]; then
+  if [ "$skip_db" = 1 ]; then
+    log "backup skipped - OpenCode running"
+  elif [ "$DRY_RUN" = "1" ]; then
+    log "DRY RUN - would back up $DB to $BACKUP_DIR"
+  else
+    mkdir -p "$BACKUP_DIR"
+    backup_db
+  fi
+fi
 
-for pair in "session directory" "session_v2 directory" "project worktree" "project_directory directory" "workspace directory"; do
+tmp="$TMPD/dead_paths"; ripe="$TMPD/ripe"; newstate="$TMPD/newstate"
+
+for pair in "session directory" "session_v2 directory" "project worktree" "project_directory directory" "worktree directory"; do
   set -- $pair
+  # columns come and go between OpenCode versions; skip a pair that no longer exists
+  sqlite3 "$DB" "SELECT 1 FROM pragma_table_info('$1') WHERE name='$2';" | grep -qx 1 || continue
   sqlite3 "$DB" "SELECT DISTINCT $2 FROM $1 WHERE $2 IS NOT NULL AND $2<>'';" |
   while IFS= read -r d; do
     [ -n "$d" ] || continue
@@ -163,7 +253,7 @@ def run(s): return con.execute(s, paths).rowcount
 n1 = run(f"DELETE FROM session           WHERE directory IN ({q})")
 n2 = run(f"DELETE FROM session_v2        WHERE directory IN ({q})")
 n3 = run(f"DELETE FROM project_directory WHERE directory IN ({q})")
-n4 = run(f"DELETE FROM workspace         WHERE directory IN ({q})")
+n4 = run(f"DELETE FROM worktree          WHERE directory IN ({q})")
 n5 = run(f"""DELETE FROM project
              WHERE worktree IN ({q})
                AND id NOT IN (SELECT DISTINCT project_id FROM session
@@ -173,14 +263,15 @@ con.commit()
 ps = con.execute("PRAGMA page_size").fetchone()[0]
 reclaim = con.execute("PRAGMA freelist_count").fetchone()[0] * ps
 con.execute("PRAGMA optimize")
-print(f"deleted sessions={n1} sessions_v2={n2} project_directory={n3} workspace={n4} projects={n5}")
+print(f"deleted sessions={n1} sessions_v2={n2} project_directory={n3} worktree={n4} projects={n5}")
 print("cascaded " + " ".join(f"{t}={before[t]-after[t]}" for t in before))
 print(f"reclaim={reclaim}")
 con.close()
 PY
 )
     rc=$(printf '%s\n' "$out" | sed -n 's/^reclaim=//p')
-    db_reclaim=$(( db_reclaim + ${rc:-0} ))
+    # each reading is the running freelist total, so it replaces the previous one
+    db_reclaim=${rc:-$db_reclaim}
     log "$(printf '%s\n' "$out" | grep -v '^reclaim=' | paste -sd'; ' -)"
     awk -F'\t' -v r="$ripe" '
       NR==FNR { dead[$1]=1; next }
@@ -201,7 +292,7 @@ if [ "$skip_db" = 0 ]; then
     else
       sqlite3 "$DB" "PRAGMA foreign_keys=ON; DELETE FROM session WHERE id IN (SELECT id FROM session_v2);"
       ps=$(sqlite3 "$DB" "PRAGMA page_size;")
-      db_reclaim=$(( db_reclaim + $(sqlite3 "$DB" "PRAGMA freelist_count;") * ps ))
+      db_reclaim=$(( $(sqlite3 "$DB" "PRAGMA freelist_count;") * ps ))
       log "legacy prune: dropped $n_mirror mirrored session rows; $(sqlite3 "$DB" "SELECT count(*) FROM session;") legacy sessions left"
     fi
   else
@@ -212,47 +303,29 @@ fi
 # ------------------------------------------------------------- age-based prune
 # Sessions are pruned by last activity (time_updated, epoch ms). Deleting a
 # session row cascades to messages, parts, todos, etc. (requires foreign_keys).
-if [ "$skip_db" = 0 ]; then
+if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null; then
   age_days="$SESSION_MAX_AGE_DAYS"
-  age_confirmed=0
-  if [ -z "$age_days" ]; then
+  now=$(date +%s)
+  cutoff_ms=$(( (now - age_days * 86400) * 1000 ))
+  n_old=$(sqlite3 "$DB" "SELECT count(*) FROM session_v2 WHERE time_updated <= $cutoff_ms;")
+  log "sessions inactive >${age_days}d: $n_old"
+  if [ "$n_old" -gt 0 ]; then
     if [ "$DRY_RUN" = "1" ]; then
-      age_days="$SESSION_MAX_AGE_PROMPT_DAYS"
-    elif [ -t 0 ]; then
-      printf 'Prune sessions with no activity for %s days? [y/N] ' "$SESSION_MAX_AGE_PROMPT_DAYS"
-      read -r reply
-      case "$reply" in
-        y|Y|yes|YES) age_days="$SESSION_MAX_AGE_PROMPT_DAYS"; age_confirmed=1;;
-        *) age_days=0;;
-      esac
+      log "DRY RUN - would prune $n_old sessions older than ${age_days}d"
     else
-      log "no tty and SESSION_MAX_AGE_DAYS unset - skipping age prune"
-      age_days=0
-    fi
-  fi
-
-  if [ "$age_days" -gt 0 ] 2>/dev/null; then
-    now=$(date +%s)
-    cutoff_ms=$(( (now - age_days * 86400) * 1000 ))
-    n_old=$(sqlite3 "$DB" "SELECT count(*) FROM session_v2 WHERE time_updated <= $cutoff_ms;")
-    log "sessions inactive >${age_days}d: $n_old"
-    if [ "$n_old" -gt 0 ]; then
-      if [ "$DRY_RUN" = "1" ]; then
-        log "DRY RUN - would prune $n_old sessions older than ${age_days}d"
-      else
-        proceed=1
-        if [ "$age_confirmed" != 1 ] && [ "$ASSUME_YES" != "1" ]; then
-          if [ -t 0 ]; then
-            printf 'Delete %s sessions with no activity for %s days? [y/N] ' "$n_old" "$age_days"
-            read -r reply
-            case "$reply" in y|Y|yes|YES) ;; *) proceed=0;; esac
-          else
-            log "no tty and ASSUME_YES != 1 - skipping age prune"
-            proceed=0
-          fi
+      proceed=1
+      if [ "$ASSUME_YES" != "1" ]; then
+        if [ -t 0 ]; then
+          printf 'Delete %s sessions unused for at least %s days? [y/N] ' "$n_old" "$age_days"
+          read -r reply || reply=""
+          case "$reply" in y|Y|yes|YES) ;; *) proceed=0;; esac
+        else
+          log "no tty and ASSUME_YES != 1 - skipping age prune"
+          proceed=0
         fi
-        if [ "$proceed" = 1 ]; then
-          out=$(python3 - "$DB" "$cutoff_ms" <<'PY'
+      fi
+      if [ "$proceed" = 1 ]; then
+        out=$(python3 - "$DB" "$cutoff_ms" <<'PY'
 import sqlite3, sys
 db, cutoff = sys.argv[1], int(sys.argv[2])
 con = sqlite3.connect(db)
@@ -273,10 +346,9 @@ print(f"reclaim={reclaim}")
 con.close()
 PY
 )
-          rc=$(printf '%s\n' "$out" | sed -n 's/^reclaim=//p')
-          db_reclaim=$(( db_reclaim + ${rc:-0} ))
-          log "pruned sessions older than ${age_days}d: $(printf '%s\n' "$out" | grep -v '^reclaim=' | paste -sd'; ' -)"
-        fi
+        rc=$(printf '%s\n' "$out" | sed -n 's/^reclaim=//p')
+        db_reclaim=${rc:-$db_reclaim}
+        log "pruned sessions older than ${age_days}d: $(printf '%s\n' "$out" | grep -v '^reclaim=' | paste -sd'; ' -)"
       fi
     fi
   fi
@@ -303,8 +375,7 @@ db_size_after=$(stat -c %s "$DB")
 # snapshot/<project-id>/<snapshot-id>/ are per-project git dirs backing revert.
 # A project id is random, never reused, so dirs without a project row are dead.
 if [ -d "$SNAP_DIR" ]; then
-  projids=$(mktemp); orphans=$(mktemp)
-  trap 'rm -f "$tmp" "$ripe" "$newstate" "$projids" "$orphans"' EXIT
+  projids="$TMPD/projids"; orphans="$TMPD/orphans"
   sqlite3 "$DB" "SELECT id FROM project;" | sort -u > "$projids"
   age=(); [ "$DEAD_GRACE_DAYS" -gt 0 ] && age=(-mtime +"$DEAD_GRACE_DAYS")
   find "$SNAP_DIR" -mindepth 1 -maxdepth 1 -type d "${age[@]}" -printf '%f\n' 2>/dev/null |

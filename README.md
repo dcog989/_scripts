@@ -142,25 +142,26 @@ Requires `kscreen-doctor`, `loginctl`, and `runuser` (util-Linux).
 Periodic maintenance for OpenCode:
 
 - Removes SQLite rows for project directories that no longer exist (which otherwise surface as "Failed to send prompt / Unable to retrieve session").
+- Backs up the DB first: `sqlite3 .backup` piped through `gzip` to `~/Downloads/opencode-db-<date>.db.gz`, keeping the 3 newest. A failed backup aborts the run before anything is written.
 - Drops the frozen legacy `session`/`message`/`part` rows that OpenCode migrated to `session_v2`/`session_message` (only rows also present in `session_v2`, so no history is lost).
-- Optionally prunes sessions with no activity for a number of days (interactive `y/N` on a tty; `ASSUME_YES=1` for unattended).
+- Optionally prunes sessions with no activity for a number of days.
 - Deletes `snapshot/<project-id>/` git dirs for projects no longer in the DB (revert snapshots; `global` is kept).
 - Rotates `~/.local/share/opencode/log/opencode.log`.
-- Runs `VACUUM` (see `DO_VACUUM` below).
+- Runs `VACUUM`.
 - Prints a `summary` line with rows pruned, DB file size delta / reusable pages, snapshot and log bytes freed.
 
-A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes are skipped while OpenCode is running (snapshot/log cleanup still runs). Output is appended to `~/.local/state/opencode/maintenance/maintenance.log` and echoed to the terminal. Intended to run from a systemd user timer or cron.
+From a terminal it asks four questions up front — backup, dead-path grace, session age, VACUUM — and Enter takes the default. With no tty (cron, systemd `--user`) it runs unattended: VACUUM on, backup off, no age prune. Any setting can be pinned with its env var, which also skips that prompt.
 
-`DO_VACUUM` defaults to `1`: `VACUUM` runs every invocation, compacting space freed by that run or earlier ones (slow on a multi-GiB DB). Set `DO_VACUUM=0` to skip it. `VACUUM` needs an exclusive lock, so it is skipped while OpenCode is running — close the app first.
+A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes (including the backup and `VACUUM`, which needs an exclusive lock) are skipped while OpenCode is running — snapshot and log cleanup still run. Output is appended to `~/.local/state/opencode/maintenance/maintenance.log` and echoed to the terminal. Intended to run from a systemd user timer or cron.
 
 ```sh
-./src/opencode-maintenance.sh                 # normal run
-DRY_RUN=1 ./src/opencode-maintenance.sh       # report what would be pruned, change nothing
-DEAD_GRACE_DAYS=0 ./src/opencode-maintenance.sh
-SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 ./src/opencode-maintenance.sh   # unattended age prune
+./src/opencode-maintenance.sh                 # interactive: 4 questions, Enter = defaults
+DRY_RUN=1 ./src/opencode-maintenance.sh       # report the full plan, change nothing, no prompts
+BACKUP=1 SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 ./src/opencode-maintenance.sh   # unattended, with backup
+DEAD_GRACE_DAYS=0 DO_VACUUM=0 ./src/opencode-maintenance.sh
 ```
 
-Tunables: `DEAD_GRACE_DAYS`, `SESSION_MAX_AGE_DAYS`, `SESSION_MAX_AGE_PROMPT_DAYS`, `ASSUME_YES`, `LOG_MAX_MB`, `LOG_KEEP`, `DO_VACUUM`, `ROOTS`, `SNAP_DIR`.
+Settings: `BACKUP`, `BACKUP_DIR`, `BACKUP_KEEP`, `DEAD_GRACE_DAYS`, `SESSION_MAX_AGE_DAYS`, `ASSUME_YES`, `DO_VACUUM`, `LOG_MAX_MB`, `LOG_KEEP`, `ROOTS`, `SNAP_DIR`.
 
 ---
 

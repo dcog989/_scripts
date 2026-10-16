@@ -17,7 +17,7 @@ All scripts live in `src/`:
 - `src/install-apps.sh` — install a fixed set of repo and AUR packages.
 - `src/monitor-refresh.sh` — switch the DP-1 monitor refresh rate (LACT profile hook).
 - `src/lact-gaming.sh` — LACT Gaming hook: switch refresh rate and park/restore tray apps.
-- `src/opencode-maintenance.sh` — prune OpenCode DB rows/snapshots for dead projects, rotate its log.
+- `src/opencode-maintenance.sh` — back up, prune (dead-path, legacy, age) and VACUUM the OpenCode DB; clean snapshot dirs; rotate its log.
 - `src/health-check.sh` — read-only report of system-wide issues (units, packages, logs, Btrfs, SMART).
 - `README.md` — usage and overview.
 
