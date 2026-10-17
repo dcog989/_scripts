@@ -6,7 +6,8 @@
 # Usage:
 #   opencode-update
 #
-# No-op when the installed CLI already matches the latest release tag.
+# No-op only when the CLI, the AppImage and its recorded version all match the
+# latest release tag.
 function opencode-update --description 'Update opencode CLI and desktop AppImage'
     set -l rel (curl -sfL https://api.github.com/repos/anomalyco/opencode/releases/latest)
     if test $status -ne 0
@@ -19,8 +20,16 @@ function opencode-update --description 'Update opencode CLI and desktop AppImage
         return 1
     end
 
+    set -l appimage ~/.local/bin/opencode-desktop.AppImage
+    set -l stamp ~/.local/state/opencode/desktop.version
+
+    # Current only when the CLI, the AppImage and its recorded version all match;
+    # the AppImage version is recorded here because it cannot be queried without
+    # launching the desktop GUI.
     set -l current (opencode --version 2>/dev/null)
-    if test "$current" = "$ver"
+    set -l installed
+    test -f "$stamp"; and set installed (string trim < "$stamp")
+    if test "$current" = "$ver"; and test -f "$appimage"; and test "$installed" = "$ver"
         echo "opencode is already up to date ($ver)"
         return 0
     end
@@ -63,12 +72,14 @@ function opencode-update --description 'Update opencode CLI and desktop AppImage
         rm -rf $tmp
         return 1
     end
-    if not mv -f $tmp/desk.AppImage ~/.local/bin/opencode-desktop.AppImage
+    if not mv -f $tmp/desk.AppImage $appimage
         echo "FAIL: desktop install"
         rm -rf $tmp
         return 1
     end
-    chmod +x ~/.local/bin/opencode-desktop.AppImage
+    chmod +x $appimage
+    mkdir -p (dirname "$stamp")
+    echo $ver > "$stamp"
 
     rm -rf $tmp
     echo "opencode updated to $ver"
