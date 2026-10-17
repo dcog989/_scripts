@@ -1,7 +1,9 @@
 # Update the opencode CLI and desktop AppImage from the latest GitHub release.
 # Installs the CLI to ~/.local/bin/opencode and the AppImage to
-# ~/.local/bin/opencode-desktop.AppImage. Both assets are downloaded before the
-# running desktop instance is stopped, so a failed download leaves it running.
+# ~/.local/bin/opencode-desktop.AppImage. Both assets are downloaded to
+# /tmp/opencode-update before the running desktop instance is stopped, so a
+# failed download leaves it running; that directory is wiped at the start of
+# every run, so an interrupted run cannot leave files behind.
 #
 # Usage:
 #   opencode-update
@@ -42,7 +44,11 @@ function opencode-update --description 'Update opencode CLI and desktop AppImage
     end
 
     echo "updating opencode $current -> $ver"
-    set -l tmp (mktemp -d)
+    # Fixed path, wiped up front: a killed run can leave partial downloads here,
+    # and starting clean means failed runs cannot accumulate them.
+    set -l tmp /tmp/opencode-update
+    rm -rf $tmp
+    mkdir -p $tmp
 
     # Download and unpack both assets before touching the running install.
     if not curl -sfL -o $tmp/oc.tar.gz "$cli_url"
