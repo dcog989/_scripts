@@ -636,6 +636,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.mode == "scan":
+        if not args.source.is_dir():
+            print(f"source {args.source} is not a directory", file=sys.stderr)
+            return 1
         entries, problems, mix, tagged = scan(args.source)
         report_mix(mix)
         report_problems(problems, args.source)
