@@ -147,7 +147,7 @@ Periodic maintenance for OpenCode:
 - Drops the frozen legacy `session`/`message`/`part` rows that OpenCode migrated to `session_v2`/`session_message` (only rows also present in `session_v2`, so no history is lost).
 - Optionally prunes sessions with no activity for a number of days.
 - Deletes `snapshot/<project-id>/` git dirs for projects no longer in the DB (revert snapshots; `global` is kept).
-- Rotates `~/.local/share/opencode/log/opencode.log`.
+- Rotates `~/.local/share/opencode/log/opencode.log` and its own run transcript, `~/.local/state/opencode/maintenance/maintenance.log`, past `LOG_MAX_MB`.
 - Runs `VACUUM`.
 - Prints a `summary` line with rows pruned, DB file size delta / reusable pages, snapshot and log bytes freed.
 

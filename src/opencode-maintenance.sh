@@ -12,7 +12,8 @@
 #  3. Back up the DB (gzipped) to ~/Downloads before anything is written.
 #  4. Optionally prune sessions with no activity for SESSION_MAX_AGE_DAYS.
 #  5. Delete snapshot/<project-id>/ git dirs for projects no longer in the DB.
-#  6. Rotate/truncate opencode.log when it grows past LOG_MAX_MB.
+#  6. Rotate/truncate opencode.log and this script's own maintenance.log when
+#     they grow past LOG_MAX_MB.
 #  7. VACUUM the DB.
 #
 # Run from a terminal it asks four questions up front (backup, dead-path grace,
@@ -62,8 +63,37 @@ DRY_RUN="${DRY_RUN:-0}"
 ROOTS=(${ROOTS:-"$HOME/Projects"})
 
 mkdir -p "$STATE_DIR"
+
+# shift archives, gzip the current file, truncate in place (copytruncate keeps
+# an app's open fd valid, so this is safe while something is writing to it)
+rotate_log() {
+  local f="$1" keep="$2" i
+  i=$keep
+  while [ "$i" -gt 1 ]; do
+    [ -f "$f.$((i-1)).gz" ] && mv -f "$f.$((i-1)).gz" "$f.$i.gz"
+    i=$((i-1))
+  done
+  cp -a "$f" "$f.1" && gzip -f "$f.1"
+  : > "$f"
+}
+
 exec > >(tee -a "$MAINT_LOG") 2>&1
 log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*"; }
+
+# This transcript only grows a line or two per run, but it is still unbounded;
+# cap it with the same thresholds as opencode's own log.
+maint_mb=0
+if [ "$LOG_MAX_MB" -gt 0 ] && [ -f "$MAINT_LOG" ]; then
+  maint_mb=$(( $(stat -c %s "$MAINT_LOG") / 1048576 ))
+fi
+if [ "$maint_mb" -gt 0 ] && [ "$maint_mb" -ge "$LOG_MAX_MB" ]; then
+  if [ "$DRY_RUN" = "1" ]; then
+    log "DRY RUN - would rotate maintenance log (${maint_mb}MB >= ${LOG_MAX_MB}MB)"
+  else
+    rotate_log "$MAINT_LOG" "$LOG_KEEP"
+    log "rotated maintenance log (${maint_mb}MB) -> $(basename "$MAINT_LOG").1.gz"
+  fi
+fi
 
 # human-readable bytes; dir_bytes sizes a tree, db page stats come from python
 hr() { awk -v b="${1:-0}" 'BEGIN{split("B KiB MiB GiB TiB",u," ");i=1;while(b>=1024&&i<5){b/=1024;i++}printf (i==1?"%d %s":"%.1f %s"),b,u[i]}'; }
@@ -166,13 +196,7 @@ if [ "$LOG_MAX_MB" -gt 0 ] && [ -f "$LOG" ]; then
       log "DRY RUN - would rotate log (${size_mb}MB >= ${LOG_MAX_MB}MB)"
     else
       log_bytes=$(( size_mb * 1048576 ))
-      i=$LOG_KEEP
-      while [ "$i" -gt 1 ]; do
-        [ -f "$LOG.$((i-1)).gz" ] && mv -f "$LOG.$((i-1)).gz" "$LOG.$i.gz"
-        i=$((i-1))
-      done
-      cp -a "$LOG" "$LOG.1" && gzip -f "$LOG.1"
-      : > "$LOG"                      # copytruncate: app keeps its fd
+      rotate_log "$LOG" "$LOG_KEEP"
       log "rotated log (${size_mb}MB) -> $(basename "$LOG").1.gz"
     fi
   else
