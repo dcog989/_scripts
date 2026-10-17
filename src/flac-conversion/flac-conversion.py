@@ -39,7 +39,6 @@ SOXR_PRECISION = 28
 DITHER_METHOD = "triangular_hp"
 FLAC_COMPRESSION = 8
 DEFAULT_JOBS = 8
-PROGRESS_INTERVAL = 500
 STREAMINFO_SIZE = 42
 HEAD_BYTES = 64
 ID3V2_HEADER_SIZE = 10
@@ -247,8 +246,6 @@ def target_format(info: StreamInfo) -> tuple[int, int]:
 
 
 def report_progress(done: int, total: int, label: str) -> None:
-    if done != total and done % PROGRESS_INTERVAL:
-        return
     percent = 100 * done // total if total else 100
     end = "\n" if done == total else "\r"
     print(f"{label} {done}/{total} ({percent}%)", end=end, file=sys.stderr, flush=True)
