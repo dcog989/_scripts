@@ -52,7 +52,7 @@ CONTAINER_MAGIC = (
 )
 MODE_TOOLS = {
     "scan": (),
-    "convert": ("ffmpeg", "ffprobe", "metaflac"),
+    "convert": ("flac", "ffmpeg", "ffprobe", "metaflac"),
     "verify": ("flac", "ffprobe", "metaflac"),
 }
 FFPROBE_TAG_ENTRY = "format_tags"
@@ -352,8 +352,11 @@ def convert_one(entry: Entry, target_root: Path, dry_run: bool) -> str:
     try:
         subprocess.run(build_command(entry, temporary), check=True)
         copy_tags(entry.source, temporary)
+        # ffmpeg exits 0 on FLAC decode errors, so the output is checked on its own
+        if failure := decode_failure(temporary):
+            raise RuntimeError(f"output does not decode ({failure})")
         os.replace(temporary, target)
-    except (subprocess.CalledProcessError, OSError) as error:
+    except (subprocess.CalledProcessError, OSError, RuntimeError) as error:
         temporary.unlink(missing_ok=True)
         raise RuntimeError(f"failed: {entry.source} ({error})") from error
     return "converted"

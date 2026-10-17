@@ -32,7 +32,7 @@ Rate is only ever lowered, by 2:1 where the family allows it. Bit depth is only 
 
 Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 4`.
 
-`scan` reads only the file header (STREAMINFO, skipping a non-standard ID3v2 tag placed in front of the FLAC stream — those files are read and listed per folder with the tag's size, since they are all rewritten) and reports anything unreadable or not actually FLAC, grouped by folder with the container it did find — MP3, Ogg, MP4/ALAC, WAV, truncated header, empty file — instead of a generic parse error. `convert` skips outputs that already exist with the right rate and bit depth, writes to `<name>.flac.part`, copies the tags across, and renames on success — it keeps going when one file fails, and the exit code is non-zero if any did.
+`scan` reads only the file header (STREAMINFO, skipping a non-standard ID3v2 tag placed in front of the FLAC stream — those files are read and listed per folder with the tag's size, since they are all rewritten) and reports anything unreadable or not actually FLAC, grouped by folder with the container it did find — MP3, Ogg, MP4/ALAC, WAV, truncated header, empty file — instead of a generic parse error. `convert` skips outputs that already exist with the right rate and bit depth, writes to `<name>.flac.part`, copies the tags across, confirms the new file decodes with `flac -t` (ffmpeg exits 0 even when it logs FLAC decode errors, so its status is not trusted), and renames on success — it keeps going when one file fails, and the exit code is non-zero if any did.
 
 `verify` decodes every output end to end with `flac -t` (so a truncated or corrupt file is caught before its tags are even looked at), then compares rate, bit depth, channel count, `PICTURE` block count and every tag against the source (the ffprobe view, so a stray ID3v2 tag counts as a source of tags), and exits non-zero on any mismatch. Run it before deleting or replacing originals; that step is deliberately not automated.
 
@@ -40,7 +40,7 @@ Tags survive by not trusting the encoder with them. ffmpeg is given no `-map_met
 
 ## Dependencies
 
-`ffmpeg` (with `libsoxr`), `ffprobe`, `metaflac`, `flac` (`verify` only, for the end-to-end decode test). All are installed.
+`ffmpeg` (with `libsoxr`), `ffprobe`, `metaflac`, `flac` (the end-to-end decode test in `convert` and `verify`). All are installed.
 
 ## Caveats
 
