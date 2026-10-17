@@ -11,7 +11,6 @@ A collection of scripts for maintaining an Arch-based (CachyOS) system and its g
 | `src/big-files.fish` | fish function | Report source files over 400 lines, grouped by project. |
 | `src/opencode-update.fish` | fish function | Update the opencode CLI and desktop AppImage. |
 | `src/install-apps.sh` | bash script | Install a fixed set of repo and AUR packages. |
-| `src/monitor-refresh.sh` | bash script | Switch the DP-1 monitor refresh rate (LACT profile hook). |
 | `src/lact-gaming.sh` | bash script | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
 | `src/opencode-maintenance.sh` | bash script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | `src/health-check.sh` | bash script | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
@@ -94,20 +93,6 @@ Installs a fixed set of packages: repo apps via `pacman` (CachyOS v3 / Arch) and
 ```sh
 ./src/install-apps.sh
 ```
-
----
-
-## monitor-refresh
-
-Switches the `DP-1` monitor refresh rate between 240Hz and 120Hz. With no argument it prints the current refresh rate and usage. Designed as a LACT profile hook: run with `240` when a game profile activates and `120` when it deactivates. When run as root (`lactd`), it picks up the desktop session environment automatically.
-
-```sh
-./src/monitor-refresh.sh        # print the current refresh rate and usage
-./src/monitor-refresh.sh 240    # switch to 240Hz
-./src/monitor-refresh.sh 120    # switch to 120Hz
-```
-
-Requires `kscreen-doctor`.
 
 ---
 
