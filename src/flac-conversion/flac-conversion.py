@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import os
 import shutil
 import subprocess
@@ -428,6 +429,23 @@ def peak_level(path: Path) -> float | None:
     return None
 
 
+def decoded_pcm_hash(path: Path) -> str | None:
+    """MD5 of the audio decoded to raw 16-bit little-endian; None when empty."""
+    # fmt: off
+    result = subprocess.run(
+        [
+            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+            "-i", str(path),
+            "-map", "0:a", "-f", "s16le", "-acodec", "pcm_s16le", "-",
+        ],
+        capture_output=True,
+    )
+    # fmt: on
+    if not result.stdout:
+        return None
+    return hashlib.md5(result.stdout).hexdigest()
+
+
 def decode_failure(path: Path) -> str | None:
     """Run the reference decoder over the whole file; None when it is clean."""
     result = subprocess.run(
@@ -506,6 +524,13 @@ def verify(entries: list[Entry], target_root: Path) -> tuple[list[str], list[str
                 warnings.append(
                     f"possible clipping: {target} has samples at full scale "
                     f"({abs(peak):g} dB)"
+                )
+        else:
+            # only the ID3v2 wrapper changed, so the audio must decode identically
+            source_hash = decoded_pcm_hash(entry.source)
+            if source_hash is not None and source_hash != decoded_pcm_hash(target):
+                problems.append(
+                    f"audio changed: {target} does not decode identically to its source"
                 )
     return problems, warnings
 
