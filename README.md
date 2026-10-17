@@ -62,12 +62,13 @@ Safe git maintenance for every repository under a directory tree. It never touch
 
 Each repo reports size before/after, loose→packed object counts, pruned remote refs, and the `fsck` result. The closing summary totals repos optimized/skipped, space reclaimed and remote refs pruned, then lists every tracked+ignored file (as `repo/path`) and any repo with `fsck` errors.
 
-It also untracks files that are both tracked and ignored (a tracked file listed in `.gitignore` is usually a mistake). Removal uses `git rm --cached`, keeping the file on disk and only stopping tracking; changes are staged, not committed. Submodule gitlinks are skipped. Under `-n` these files are reported but not untracked.
+It also reports files that are both tracked and ignored (a tracked file listed in `.gitignore` is usually a mistake). With `-u` it untracks them: removal uses `git rm --cached`, keeping the file on disk and only stopping tracking; changes are staged, not committed. Submodule gitlinks are skipped. Under `-n` these files are reported but not untracked.
 
 ```sh
 git-maintenance                 # optimize all repos under /home/bubba/Projects
 git-maintenance /some/dir       # optimize repos under a specific directory
 git-maintenance -b /some/dir    # same, via flag
+git-maintenance -u              # also untrack reported tracked+ignored files
 git-maintenance -n              # dry run: report stats, change nothing
 git-maintenance -a              # aggressive: --aggressive --prune=now (much slower)
 ```

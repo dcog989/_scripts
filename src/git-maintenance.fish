@@ -3,15 +3,17 @@
 # It never touches the working tree, uses no `git clean`, no reflog expiry, no
 # `--prune=now`, and never deletes branches, tags, stashes or remotes.
 #
-# It also untracks files that are both tracked and ignored (a tracked file listed
-# in .gitignore is usually a mistake). Removal uses `git rm --cached`, which keeps
-# the file on disk and only stops tracking it; changes are staged, not committed.
-# Submodule gitlinks are never touched.
+# Files that are both tracked and ignored (a tracked file listed in .gitignore is
+# usually a mistake) are always reported, but only untracked when -u is passed.
+# Removal uses `git rm --cached`, which keeps the file on disk and only stops
+# tracking it; changes are staged, not committed. Submodule gitlinks are never
+# touched.
 #
 # Usage:
 #   git-maintenance                 # optimize all repos under /home/bubba/Projects
 #   git-maintenance /some/dir       # optimize repos under a specific directory
 #   git-maintenance -b /some/dir    # same, via flag
+#   git-maintenance -u              # also untrack reported tracked+ignored files
 #   git-maintenance -n              # dry run: report stats, change nothing
 #   git-maintenance --dry-run       # same as -n
 #   git-maintenance -a              # aggressive: adds --aggressive --prune=now
@@ -39,13 +41,14 @@ function __gm_human --description 'format a KiB value as human-readable'
 end
 
 function git-maintenance --description 'Safely optimize all git repos under a directory'
-    argparse n/dry-run 'b/base=' a/aggressive -- $argv; or return 2
+    argparse n/dry-run u/untrack 'b/base=' a/aggressive -- $argv; or return 2
 
     set -l base /home/bubba/Projects
     test -n "$_flag_base"; and set base "$_flag_base"
     test (count $argv) -gt 0; and set base "$argv[1]"
     set -l dry_run $_flag_dry_run
     set -l aggressive $_flag_aggressive
+    set -l untrack $_flag_untrack
 
     if not test -d "$base"
         echo "git-maintenance: not a directory: $base" >&2
@@ -137,7 +140,7 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         end
         if test (count $ignored_files) -gt 0
             set -a flagged_repos "$name"
-            if test -z "$dry_run"
+            if test -n "$untrack"; and test -z "$dry_run"
                 git -C "$repo" rm --cached --quiet -- $ignored_files
             end
             echo "$gold !$off $name $gold(tracked+ignored:"(count $ignored_files)" file(s))$off"
@@ -229,7 +232,8 @@ function git-maintenance --description 'Safely optimize all git repos under a di
     echo $green"optimized: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail
     test $pruned_total -gt 0; and echo $dim"remote refs pruned: "$off$pruned_total
 
-    set -l untrack_state "staged for untracking; commit each repo to apply"
+    set -l untrack_state "left tracked; pass -u to untrack"
+    test -n "$untrack"; and set untrack_state "staged for untracking; commit each repo to apply"
     test -n "$dry_run"; and set untrack_state "dry run: left tracked"
     if test (count $flagged_files) -gt 0
         echo $gold"tracked+ignored: "(count $flagged_files)" file(s) in "(count $flagged_repos)" repo(s) "$dim"($untrack_state)"$off
