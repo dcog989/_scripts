@@ -91,11 +91,15 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 - CachyOS, KDE Plasma 6, Wayland, Btrfs.
 - fish shell, Ghostty terminal, Fresh TUI editor, yay package manager, bun npm manager, Firefox, and Zed code editor.
 
+### Testing
+
+- Do not create test files for trivial changes, or for behavior that is not reliably unit-testable in the test environment (e.g. UI layout/click mapping). Prefer no new files; only add a test when the logic is genuinely testable and worth guarding.
+
 ### Definition of Done
 
 - Logic fully implemented.
-- README.md + AGENTS.md updated as needed.
-- Print a concise conventional commit message in a fenced code block, see below.
+- Existing docs updated if public interfaces changed.
+- When required by the `Verification` rules, run the corresponding `Workflow` command.
 
 ### Commit Messages
 
@@ -105,10 +109,7 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 
 ### Communication Style
 
-- Provide concise, actionable responses.
-- Answer in the fewest words that fully answer. No preamble, no restating the request, no summary of what you just did, no tables unless asked for.
-- Ask clarifying questions when requirements are ambiguous.
-- Flag potential risks or edge cases proactively.
-- Do not pretend to understand how the user feels.
-- Never editorialise your answer. No "honest answer", hedging, disclaimers, or meta-commentary — just answer.
-- Never end with "want me to…?" or a list of options unless a real decision is needed. If nothing is needed, end.
+- Fixes and instructions: numbered steps, one action each, exact command/path/code. No prose paragraphs or recap.
+- Questions and explanations: direct prose, only the reasoning needed. No tables unless asked.
+- No preamble, restating, hedging, disclaimers, meta-commentary, emotional framing, or closing offers; end when done unless a real decision is needed.
+- Ask when requirements are ambiguous; put risks and edge cases in one final line.
