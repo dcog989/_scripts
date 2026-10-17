@@ -149,8 +149,8 @@ def normalise_tags(tags: list[tuple[str, str]]) -> set[str]:
     return {f"{key.lower()}={value}" for key, value in tags}
 
 
-def read_metadata(path: Path) -> tuple[int, set[str]]:
-    """Count PICTURE blocks and collect VORBIS_COMMENT tags in one pass."""
+def read_metadata(path: Path) -> tuple[list[int], set[str]]:
+    """Collect PICTURE block lengths and VORBIS_COMMENT tags in one pass."""
     # metaflac exits 1 when a file has neither block, which is a normal result here
     result = subprocess.run(
         [
@@ -166,11 +166,17 @@ def read_metadata(path: Path) -> tuple[int, set[str]]:
         encoding="utf-8",
     )
     output = result.stdout or ""
-    pictures = output.count("type: 6 (PICTURE)")
+    pictures: list[int] = []
+    in_picture = False
     tags: list[tuple[str, str]] = []
     for line in output.splitlines():
-        if line.strip().startswith("comment["):
-            key, _, value = line.split(": ", 1)[1].partition("=")
+        stripped = line.strip()
+        if stripped.startswith("type: "):
+            in_picture = stripped == "type: 6 (PICTURE)"
+        elif in_picture and stripped.startswith("length: "):
+            pictures.append(int(stripped.split(" ", 1)[1]))
+        elif stripped.startswith("comment["):
+            key, _, value = stripped.split(": ", 1)[1].partition("=")
             tags.append((key, value))
     return pictures, normalise_tags(tags)
 
@@ -506,7 +512,7 @@ def verify(entries: list[Entry], target_root: Path) -> tuple[list[str], list[str
         source_tags = normalise_tags(probe_tags(entry.source))
         if source_pictures != target_pictures:
             problems.append(
-                f"cover art count changed: {target} has {target_pictures}, "
+                f"cover art changed: {target} has pictures of {target_pictures} bytes, "
                 f"source has {source_pictures}"
             )
         if source_tags != target_tags:
