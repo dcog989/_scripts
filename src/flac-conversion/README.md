@@ -30,7 +30,9 @@ Rate is only ever lowered, by 2:1 where the family allows it. Bit depth is only 
 ./src/flac-conversion/flac-conversion.py verify    # Check every output against its source before touching the originals
 ``` 
 
-Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 4`.
+Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 8`.
+
+`convert` and `verify` each close with the job list's size report, summed from the files on disk — `91.31 GiB in -> 45.62 GiB out (-50.0%)` over the whole library, and near `-0.0%` for the tag-only rewrites. An output that does not exist yet, because the run is partial or the file failed, counts as zero bytes.
 
 `scan` reads only the file header (STREAMINFO, skipping a non-standard ID3v2 tag placed in front of the FLAC stream — those files are read and listed per folder with the tag's size, since they are all rewritten) and reports anything unreadable or not actually FLAC, grouped by folder with the container it did find — MP3, Ogg, MP4/ALAC, WAV, truncated header, empty file — instead of a generic parse error. `convert` skips outputs that already exist with the right rate and bit depth, writes to `<name>.flac.part`, copies the tags across, drops the trailing ID3v1 tag that ID3v2-tagged files also carry (ffmpeg muxes it as audio, and the decoder rejects anything after the last frame), confirms the new file decodes with `flac -t` (ffmpeg exits 0 even when it logs FLAC decode errors, so its status is not trusted), and renames on success — it keeps going when one file fails, and the exit code is non-zero if any did.
 

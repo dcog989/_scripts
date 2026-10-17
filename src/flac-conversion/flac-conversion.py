@@ -586,6 +586,34 @@ def plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
 
+def file_size(path: Path) -> int:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return 0
+
+
+def format_size(size: int) -> str:
+    """Bytes in the largest unit that keeps the number short."""
+    units = ("B", "KiB", "MiB", "GiB", "TiB")
+    index = 0
+    value = float(size)
+    while value >= 1024 and index < len(units) - 1:
+        value /= 1024
+        index += 1
+    return f"{value:.1f} {units[index]}"
+
+
+def report_size(entries: list[Entry], target_root: Path) -> None:
+    """Total bytes of the job list's sources against what their outputs use."""
+    before = sum(file_size(entry.source) for entry in entries)
+    if not before:
+        return
+    after = sum(file_size(target_root / entry.relative) for entry in entries)
+    change = 100 * (after / before - 1)
+    print(f"{format_size(before)} in -> {format_size(after)} out ({change:+.1f}%)")
+
+
 def report_problems(problems: list[tuple[Path, str]], source: Path) -> None:
     if not problems:
         return
@@ -724,6 +752,8 @@ def main(argv: list[str] | None = None) -> int:
         for failure in failures:
             print(failure, file=sys.stderr)
         print(f"\n{summarise(counts, len(entries))}")
+        if not args.dry_run:
+            report_size(entries, target)
         return 1 if failures else 0
 
     problems, warnings = verify(entries, target, args.jobs)
@@ -732,6 +762,7 @@ def main(argv: list[str] | None = None) -> int:
     for problem in problems:
         print(problem, file=sys.stderr)
     print(f"\n{len(entries) - len(problems)}/{len(entries)} outputs match their source")
+    report_size(entries, target)
     return 1 if problems else 0
 
 
