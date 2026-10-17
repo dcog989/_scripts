@@ -25,7 +25,8 @@
 # every tracked+ignored file (as repo/path) and any repo with fsck errors. In
 # dry-run it instead totals the projected reclaim: current object data minus a
 # read-only simulated repack, which accounts for loose objects, pack rebuilding
-# and pruning.
+# and pruning. The simulation compresses every object, so it costs about as much
+# as a real repack, and the summary counts repos scanned rather than optimized.
 
 function __gm_human --description 'format a KiB value as human-readable'
     set -l kb $argv[1]
@@ -227,9 +228,13 @@ function git-maintenance --description 'Safely optimize all git repos under a di
     end
 
     set -l tail "reclaimed: "(__gm_human $reclaimed_kb)
-    test -n "$dry_run"; and set tail "reclaimable (est.): "(__gm_human $reclaimable_kb)
+    set -l counted optimized
+    if test -n "$dry_run"
+        set tail "reclaimable (est.): "(__gm_human $reclaimable_kb)
+        set counted scanned
+    end
     echo
-    echo $green"optimized: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail
+    echo $green"$counted: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail
     test $pruned_total -gt 0; and echo $dim"remote refs pruned: "$off$pruned_total
 
     set -l untrack_state "left tracked; pass -u to untrack"
