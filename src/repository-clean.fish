@@ -4,9 +4,9 @@
 # Usage:
 #   repository-clean
 #
-# The package cache report previews what the AUR helper's `-Sc` will reclaim
-# (old versions at keep-1 plus uninstalled packages), so the counts match the
-# space actually freed. Cleanup prompts once before making any changes.
+# The package cache report previews what cleanup reclaims: cached versions
+# beyond the keep-3 prune, plus every cached version of an uninstalled package.
+# Cleanup prompts once before making any changes.
 #
 function repository-clean --description 'List then clean pacman/AUR package leftovers'
     set -l sec (set_color --bold yellow)
@@ -14,6 +14,9 @@ function repository-clean --description 'List then clean pacman/AUR package left
     set -l bad (set_color red)
     set -l dim (set_color brblack)
     set -l off (set_color normal)
+
+    # Cached versions kept per installed package: prune step and preview share it.
+    set -l keep 3
 
     set -l aur
     command -q yay; and set aur yay
@@ -41,7 +44,7 @@ function repository-clean --description 'List then clean pacman/AUR package left
     echo
     echo $sec"Package cache"$off" (/var/cache/pacman/pkg)"
     echo "  "$dim"total size:    "$off(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
-    echo "  "$dim"old versions:  "$off(paccache -d -k 1 2>/dev/null | tail -1)
+    echo "  "$dim"old versions:  "$off(paccache -d -k $keep 2>/dev/null | tail -1)
     echo "  "$dim"uninstalled:   "$off(paccache -d -u -k 0 2>/dev/null | tail -1)
 
     if test -n "$aur"
@@ -66,8 +69,8 @@ function repository-clean --description 'List then clean pacman/AUR package left
         echo "  "$dim"none"$off
     end
 
-    echo $sec"== Pruning cache (keep 3) =="$off
-    set -l res (sudo paccache -r -k 3 2>&1)
+    echo $sec"== Pruning cache (keep $keep) =="$off
+    set -l res (sudo paccache -r -k $keep 2>&1)
     if string match -q '*no candidate*' -- $res
         echo "  "$dim"nothing to clean"$off
     else
