@@ -131,6 +131,12 @@ under_roots() {
   return 1
 }
 
+# table_exists <name> - false when the table is absent (schema changes between
+# OpenCode versions)
+table_exists() {
+  [ "$(sqlite3 "$DB" "SELECT count(*) FROM pragma_table_info('$1');")" -gt 0 ]
+}
+
 # ------------------------------------------------------------------- choices
 if [ -t 0 ] && [ "$DRY_RUN" != "1" ]; then
   if oc_running; then log "warning: OpenCode is running - DB backup, prune and VACUUM will be skipped"; fi
@@ -247,24 +253,26 @@ q = ",".join("?" * len(paths))
 con = sqlite3.connect(db)
 con.execute("PRAGMA foreign_keys=ON")
 con.execute("BEGIN")
+have = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 def count(t): return con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
-before = {t: count(t) for t in ("session_v2", "session_message", "message", "part")}
+counted = [t for t in ("session_v2", "session_message", "message", "part") if t in have]
+before = {t: count(t) for t in counted}
 def run(s): return con.execute(s, paths).rowcount
-n1 = run(f"DELETE FROM session           WHERE directory IN ({q})")
-n2 = run(f"DELETE FROM session_v2        WHERE directory IN ({q})")
-n3 = run(f"DELETE FROM project_directory WHERE directory IN ({q})")
-n4 = run(f"DELETE FROM worktree          WHERE directory IN ({q})")
-n5 = run(f"""DELETE FROM project
-             WHERE worktree IN ({q})
-               AND id NOT IN (SELECT DISTINCT project_id FROM session
-                              UNION SELECT DISTINCT project_id FROM session_v2)""")
-after = {t: count(t) for t in ("session_v2", "session_message", "message", "part")}
+deleted = {}
+for t in ("session", "session_v2", "project_directory", "worktree"):
+    if t in have:
+        deleted[t] = run(f"DELETE FROM {t} WHERE directory IN ({q})")
+sessions = [t for t in ("session", "session_v2") if t in have]
+if "project" in have and sessions:
+    keep = " UNION ".join(f"SELECT DISTINCT project_id FROM {t}" for t in sessions)
+    deleted["project"] = run(f"DELETE FROM project WHERE worktree IN ({q}) AND id NOT IN ({keep})")
+after = {t: count(t) for t in counted}
 con.commit()
 ps = con.execute("PRAGMA page_size").fetchone()[0]
 reclaim = con.execute("PRAGMA freelist_count").fetchone()[0] * ps
 con.execute("PRAGMA optimize")
-print(f"deleted sessions={n1} sessions_v2={n2} project_directory={n3} worktree={n4} projects={n5}")
-print("cascaded " + " ".join(f"{t}={before[t]-after[t]}" for t in before))
+print("deleted " + " ".join(f"{t}={n}" for t, n in deleted.items()))
+print("cascaded " + " ".join(f"{t}={before[t]-after[t]}" for t in counted))
 print(f"reclaim={reclaim}")
 con.close()
 PY
@@ -285,25 +293,29 @@ fi
 # tables are frozen mirrors. Only rows also in session_v2 are dropped, so no
 # history is lost; the FK cascade clears their message/part rows.
 if [ "$skip_db" = 0 ]; then
-  n_mirror=$(sqlite3 "$DB" "SELECT count(*) FROM session WHERE id IN (SELECT id FROM session_v2);")
-  if [ "$n_mirror" -gt 0 ]; then
-    if [ "$DRY_RUN" = "1" ]; then
-      log "DRY RUN - would drop $n_mirror legacy session rows mirrored in session_v2"
-    else
-      sqlite3 "$DB" "PRAGMA foreign_keys=ON; DELETE FROM session WHERE id IN (SELECT id FROM session_v2);"
-      ps=$(sqlite3 "$DB" "PRAGMA page_size;")
-      db_reclaim=$(( $(sqlite3 "$DB" "PRAGMA freelist_count;") * ps ))
-      log "legacy prune: dropped $n_mirror mirrored session rows; $(sqlite3 "$DB" "SELECT count(*) FROM session;") legacy sessions left"
-    fi
+  if ! table_exists session || ! table_exists session_v2; then
+    log "legacy session tables absent - nothing to drop"
   else
-    log "no legacy session rows to drop"
+    n_mirror=$(sqlite3 "$DB" "SELECT count(*) FROM session WHERE id IN (SELECT id FROM session_v2);")
+    if [ "$n_mirror" -gt 0 ]; then
+      if [ "$DRY_RUN" = "1" ]; then
+        log "DRY RUN - would drop $n_mirror legacy session rows mirrored in session_v2"
+      else
+        sqlite3 "$DB" "PRAGMA foreign_keys=ON; DELETE FROM session WHERE id IN (SELECT id FROM session_v2);"
+        ps=$(sqlite3 "$DB" "PRAGMA page_size;")
+        db_reclaim=$(( $(sqlite3 "$DB" "PRAGMA freelist_count;") * ps ))
+        log "legacy prune: dropped $n_mirror mirrored session rows; $(sqlite3 "$DB" "SELECT count(*) FROM session;") legacy sessions left"
+      fi
+    else
+      log "no legacy session rows to drop"
+    fi
   fi
 fi
 
 # ------------------------------------------------------------- age-based prune
 # Sessions are pruned by last activity (time_updated, epoch ms). Deleting a
 # session row cascades to messages, parts, todos, etc. (requires foreign_keys).
-if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null; then
+if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && table_exists session_v2; then
   age_days="$SESSION_MAX_AGE_DAYS"
   now=$(date +%s)
   cutoff_ms=$(( (now - age_days * 86400) * 1000 ))
@@ -331,17 +343,20 @@ db, cutoff = sys.argv[1], int(sys.argv[2])
 con = sqlite3.connect(db)
 con.execute("PRAGMA foreign_keys=ON")
 con.execute("BEGIN")
-tables = ("session_v2", "session", "session_message", "message", "part")
+have = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+counted = [t for t in ("session_v2", "session", "session_message", "message", "part") if t in have]
 def count(t): return con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
-before = {t: count(t) for t in tables}
-con.execute("DELETE FROM session_v2 WHERE time_updated <= ?", (cutoff,))
-con.execute("DELETE FROM session    WHERE time_updated <= ?", (cutoff,))
+before = {t: count(t) for t in counted}
+deleted = {}
+for t in ("session_v2", "session"):
+    if t in have:
+        deleted[t] = con.execute(f"DELETE FROM {t} WHERE time_updated <= ?", (cutoff,)).rowcount
 con.commit()
-after = {t: count(t) for t in tables}
+after = {t: count(t) for t in counted}
 ps = con.execute("PRAGMA page_size").fetchone()[0]
 reclaim = con.execute("PRAGMA freelist_count").fetchone()[0] * ps
 con.execute("PRAGMA optimize")
-print("deleted " + ", ".join(f"{t}={before[t]-after[t]}" for t in tables))
+print("deleted " + ", ".join(f"{t}={n}" for t, n in deleted.items()))
 print(f"reclaim={reclaim}")
 con.close()
 PY
@@ -374,7 +389,11 @@ db_size_after=$(stat -c %s "$DB")
 # ------------------------------------------------------------------ snapshots
 # snapshot/<project-id>/<snapshot-id>/ are per-project git dirs backing revert.
 # A project id is random, never reused, so dirs without a project row are dead.
-if [ -d "$SNAP_DIR" ]; then
+if [ ! -d "$SNAP_DIR" ]; then
+  :
+elif ! table_exists project; then
+  log "project table absent - snapshot cleanup skipped"
+else
   projids="$TMPD/projids"; orphans="$TMPD/orphans"
   sqlite3 "$DB" "SELECT id FROM project;" | sort -u > "$projids"
   age=(); [ "$DEAD_GRACE_DAYS" -gt 0 ] && age=(-mtime +"$DEAD_GRACE_DAYS")
