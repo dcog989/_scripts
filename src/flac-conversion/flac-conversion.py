@@ -38,7 +38,7 @@ RATE_FAMILY = 44100
 SOXR_PRECISION = 28
 DITHER_METHOD = "triangular_hp"
 FLAC_COMPRESSION = 8
-DEFAULT_JOBS = 4
+DEFAULT_JOBS = 8
 PROGRESS_INTERVAL = 500
 STREAMINFO_SIZE = 42
 HEAD_BYTES = 64
@@ -255,6 +255,7 @@ def report_progress(done: int, total: int, label: str) -> None:
 
 def scan(
     source: Path,
+    jobs: int,
 ) -> tuple[
     list[Entry],
     list[tuple[Path, str]],
@@ -271,20 +272,27 @@ def scan(
         for path in sorted(source.rglob("*"))
         if path.is_file() and path.suffix.lower() == ".flac"
     ]
-    for done, path in enumerate(files, start=1):
-        report_progress(done, len(files), "scanning")
+
+    def inspect(path: Path) -> tuple[Path, StreamInfo | None, int, str | None]:
         try:
             tag_length = id3v2_length(read_head(path, ID3V2_HEADER_SIZE))
+            return path, read_streaminfo(path), tag_length, None
+        except (OSError, ValueError) as error:
+            return path, None, 0, str(error)
+
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        results = pool.map(inspect, files)
+        for done, (path, info, tag_length, error) in enumerate(results, start=1):
+            report_progress(done, len(files), "scanning")
+            if info is None:
+                problems.append((path, error or "unreadable"))
+                continue
             if tag_length:
                 tagged.append((path, tag_length))
-            info = read_streaminfo(path)
-        except (OSError, ValueError) as error:
-            problems.append((path, str(error)))
-            continue
-        mix[(info.rate, info.bits)] += 1
-        if needs_conversion(info, tag_length):
-            rate, bits = target_format(info)
-            entries.append(Entry(path, path.relative_to(source), info, rate, bits))
+            mix[(info.rate, info.bits)] += 1
+            if needs_conversion(info, tag_length):
+                rate, bits = target_format(info)
+                entries.append(Entry(path, path.relative_to(source), info, rate, bits))
 
     return entries, problems, mix, tagged
 
@@ -475,75 +483,85 @@ def decode_failure(path: Path) -> str | None:
     return lines[0] if lines else "decoder exited non-zero"
 
 
-def verify(entries: list[Entry], target_root: Path) -> tuple[list[str], list[str]]:
+def check_output(entry: Entry, target_root: Path) -> tuple[list[str], list[str]]:
+    """Compare one output against its source; return problems and warnings."""
     problems: list[str] = []
     warnings: list[str] = []
-    for done, entry in enumerate(entries, start=1):
-        report_progress(done, len(entries), "verifying")
-        target = target_root / entry.relative
-        if not target.exists():
-            problems.append(f"missing output: {target}")
-            continue
-        # a file that does not decode has no meaningful format or tags to compare
-        if failure := decode_failure(target):
-            problems.append(f"does not decode: {target}: {failure}")
-            continue
-        try:
-            info = read_streaminfo(target)
-        except (OSError, ValueError) as error:
-            problems.append(f"unreadable output: {target}: {error}")
-            continue
-        if (info.rate, info.bits, info.channels) != (
-            entry.rate,
-            entry.bits,
-            entry.current.channels,
-        ):
-            problems.append(
-                f"wrong format: {target} is {info.rate} Hz/{info.bits} bit/{info.channels} ch, "
-                f"expected {entry.rate} Hz/{entry.bits} bit/{entry.current.channels} ch"
+    target = target_root / entry.relative
+    if not target.exists():
+        return [f"missing output: {target}"], warnings
+    # a file that does not decode has no meaningful format or tags to compare
+    if failure := decode_failure(target):
+        return [f"does not decode: {target}: {failure}"], warnings
+    try:
+        info = read_streaminfo(target)
+    except (OSError, ValueError) as error:
+        return [f"unreadable output: {target}: {error}"], warnings
+    if (info.rate, info.bits, info.channels) != (
+        entry.rate,
+        entry.bits,
+        entry.current.channels,
+    ):
+        problems.append(
+            f"wrong format: {target} is {info.rate} Hz/{info.bits} bit/{info.channels} ch, "
+            f"expected {entry.rate} Hz/{entry.bits} bit/{entry.current.channels} ch"
+        )
+    ratio = entry.rate / entry.current.rate
+    expected_samples = round(entry.current.samples * ratio)
+    if (
+        entry.current.samples
+        and abs(info.samples - expected_samples) > LENGTH_TOLERANCE_SAMPLES
+    ):
+        problems.append(
+            f"wrong length: {target} has {info.samples} samples, expected "
+            f"{expected_samples} from {entry.current.samples} at "
+            f"{entry.current.rate} Hz"
+        )
+    source_pictures, _ = read_metadata(entry.source)
+    target_pictures, target_tags = read_metadata(target)
+    source_tags = normalise_tags(probe_tags(entry.source))
+    if source_pictures != target_pictures:
+        problems.append(
+            f"cover art changed: {target} has pictures of {target_pictures} bytes, "
+            f"source has {source_pictures}"
+        )
+    if source_tags != target_tags:
+        missing = sorted(source_tags - target_tags)
+        extra = sorted(target_tags - source_tags)
+        detail = []
+        if missing:
+            detail.append(f"lacks {missing}")
+        if extra:
+            detail.append(f"has extra {extra}")
+        problems.append(f"tags differ: {target} {', '.join(detail)}")
+    if entry.rate != entry.current.rate or entry.bits != entry.current.bits:
+        peak = peak_level(target)
+        if peak is not None and peak >= CLIP_PEAK_DB:
+            warnings.append(
+                f"possible clipping: {target} has samples at full scale "
+                f"({abs(peak):g} dB)"
             )
-        ratio = entry.rate / entry.current.rate
-        expected_samples = round(entry.current.samples * ratio)
-        if (
-            entry.current.samples
-            and abs(info.samples - expected_samples) > LENGTH_TOLERANCE_SAMPLES
-        ):
+    else:
+        # only the ID3v2 wrapper changed, so the audio must decode identically
+        source_hash = decoded_pcm_hash(entry.source)
+        if source_hash is not None and source_hash != decoded_pcm_hash(target):
             problems.append(
-                f"wrong length: {target} has {info.samples} samples, expected "
-                f"{expected_samples} from {entry.current.samples} at "
-                f"{entry.current.rate} Hz"
+                f"audio changed: {target} does not decode identically to its source"
             )
-        source_pictures, _ = read_metadata(entry.source)
-        target_pictures, target_tags = read_metadata(target)
-        source_tags = normalise_tags(probe_tags(entry.source))
-        if source_pictures != target_pictures:
-            problems.append(
-                f"cover art changed: {target} has pictures of {target_pictures} bytes, "
-                f"source has {source_pictures}"
-            )
-        if source_tags != target_tags:
-            missing = sorted(source_tags - target_tags)
-            extra = sorted(target_tags - source_tags)
-            detail = []
-            if missing:
-                detail.append(f"lacks {missing}")
-            if extra:
-                detail.append(f"has extra {extra}")
-            problems.append(f"tags differ: {target} {', '.join(detail)}")
-        if entry.rate != entry.current.rate or entry.bits != entry.current.bits:
-            peak = peak_level(target)
-            if peak is not None and peak >= CLIP_PEAK_DB:
-                warnings.append(
-                    f"possible clipping: {target} has samples at full scale "
-                    f"({abs(peak):g} dB)"
-                )
-        else:
-            # only the ID3v2 wrapper changed, so the audio must decode identically
-            source_hash = decoded_pcm_hash(entry.source)
-            if source_hash is not None and source_hash != decoded_pcm_hash(target):
-                problems.append(
-                    f"audio changed: {target} does not decode identically to its source"
-                )
+    return problems, warnings
+
+
+def verify(
+    entries: list[Entry], target_root: Path, jobs: int
+) -> tuple[list[str], list[str]]:
+    problems: list[str] = []
+    warnings: list[str] = []
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        results = pool.map(lambda entry: check_output(entry, target_root), entries)
+        for done, (entry_problems, entry_warnings) in enumerate(results, start=1):
+            report_progress(done, len(entries), "verifying")
+            problems.extend(entry_problems)
+            warnings.extend(entry_warnings)
     return problems, warnings
 
 
@@ -619,6 +637,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     common.add_argument("--target", type=Path, default=DEFAULT_TARGET)
     common.add_argument("--job-list", type=Path, default=DEFAULT_JOB_LIST)
+    common.add_argument("--jobs", type=int, default=DEFAULT_JOBS)
 
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     modes = parser.add_subparsers(dest="mode", required=True)
@@ -630,7 +649,6 @@ def build_parser() -> argparse.ArgumentParser:
     convert_parser = modes.add_parser(
         "convert", parents=[common], help="transcode the job list into the target tree"
     )
-    convert_parser.add_argument("--jobs", type=int, default=DEFAULT_JOBS)
     convert_parser.add_argument("--dry-run", action="store_true")
     modes.add_parser(
         "verify", parents=[common], help="check every output against its source"
@@ -640,6 +658,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.jobs < 1:
+        print("--jobs must be at least 1", file=sys.stderr)
+        return 1
     try:
         require_tools(args.mode)
         target = resolve_target(args.source, args.target)
@@ -651,7 +672,7 @@ def main(argv: list[str] | None = None) -> int:
         if not args.source.is_dir():
             print(f"source {args.source} is not a directory", file=sys.stderr)
             return 1
-        entries, problems, mix, tagged = scan(args.source)
+        entries, problems, mix, tagged = scan(args.source, args.jobs)
         report_mix(mix)
         report_problems(problems, args.source)
         report_tagged(tagged, args.source)
@@ -688,7 +709,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{summarise(counts, len(entries))}")
         return 1 if failures else 0
 
-    problems, warnings = verify(entries, target)
+    problems, warnings = verify(entries, target, args.jobs)
     for warning in warnings:
         print(warning, file=sys.stderr)
     for problem in problems:
