@@ -34,13 +34,13 @@ Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-lis
 
 `scan` reads only the file header (STREAMINFO, skipping a non-standard ID3v2 tag placed in front of the FLAC stream — those files are read and listed per folder with the tag's size, since they are all rewritten) and reports anything unreadable or not actually FLAC, grouped by folder with the container it did find — MP3, Ogg, MP4/ALAC, WAV, truncated header, empty file — instead of a generic parse error. `convert` skips outputs that already exist with the right rate and bit depth, writes to `<name>.flac.part`, copies the tags across, and renames on success — it keeps going when one file fails, and the exit code is non-zero if any did.
 
-`verify` compares rate, bit depth, channel count, `PICTURE` block count and every tag against the source (the ffprobe view, so a stray ID3v2 tag counts as a source of tags), and exits non-zero on any mismatch. Run it before deleting or replacing originals; that step is deliberately not automated.
+`verify` decodes every output end to end with `flac -t` (so a truncated or corrupt file is caught before its tags are even looked at), then compares rate, bit depth, channel count, `PICTURE` block count and every tag against the source (the ffprobe view, so a stray ID3v2 tag counts as a source of tags), and exits non-zero on any mismatch. Run it before deleting or replacing originals; that step is deliberately not automated.
 
 Tags survive by not trusting the encoder with them. ffmpeg is given no `-map_metadata`, and after each rewrite the source's tags are read with `ffprobe` and written onto the output with `metaflac`, replacing whatever the encoder left behind. That is why a file whose metadata lives only in its ID3v2 tag keeps it: the tag is gone, the values are not. If a source has no tags, the output has none — the encoder's own `encoder=Lavf…` tag is removed too.
 
 ## Dependencies
 
-`ffmpeg` (with `libsoxr`), `ffprobe`, `metaflac`. All are installed.
+`ffmpeg` (with `libsoxr`), `ffprobe`, `metaflac`, `flac` (`verify` only, for the end-to-end decode test). All are installed.
 
 ## Caveats
 

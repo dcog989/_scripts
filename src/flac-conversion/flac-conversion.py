@@ -53,7 +53,7 @@ CONTAINER_MAGIC = (
 MODE_TOOLS = {
     "scan": (),
     "convert": ("ffmpeg", "ffprobe", "metaflac"),
-    "verify": ("ffprobe", "metaflac"),
+    "verify": ("flac", "ffprobe", "metaflac"),
 }
 FFPROBE_TAG_ENTRY = "format_tags"
 FFPROBE_TAG_PREFIX = "TAG:"
@@ -393,6 +393,23 @@ def summarise(counts: collections.Counter[str], total: int) -> str:
     )
 
 
+def decode_failure(path: Path) -> str | None:
+    """Run the reference decoder over the whole file; None when it is clean."""
+    result = subprocess.run(
+        ["flac", "-t", "-s", str(path)],
+        capture_output=True,
+        encoding="utf-8",
+    )
+    if result.returncode == 0:
+        return None
+    lines = [
+        line.strip()
+        for line in ((result.stderr or "") + (result.stdout or "")).splitlines()
+        if line.strip()
+    ]
+    return lines[0] if lines else "decoder exited non-zero"
+
+
 def verify(entries: list[Entry], target_root: Path) -> list[str]:
     problems: list[str] = []
     for done, entry in enumerate(entries, start=1):
@@ -400,6 +417,10 @@ def verify(entries: list[Entry], target_root: Path) -> list[str]:
         target = target_root / entry.relative
         if not target.exists():
             problems.append(f"missing output: {target}")
+            continue
+        # a file that does not decode has no meaningful format or tags to compare
+        if failure := decode_failure(target):
+            problems.append(f"does not decode: {target}: {failure}")
             continue
         try:
             info = read_streaminfo(target)
