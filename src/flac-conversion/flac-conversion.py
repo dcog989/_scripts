@@ -60,6 +60,19 @@ MODE_TOOLS = {
 }
 FFPROBE_TAG_ENTRY = "format_tags"
 FFPROBE_TAG_PREFIX = "TAG:"
+# ffmpeg reports metadata under its own names; players look for the Vorbis spellings
+CANONICAL_KEYS = {
+    "track": "TRACKNUMBER",
+    "disc": "DISCNUMBER",
+    "album_artist": "ALBUMARTIST",
+    "albumartist": "ALBUMARTIST",
+    "tracktotal": "TRACKTOTAL",
+    "totaltracks": "TRACKTOTAL",
+    "disctotal": "DISCTOTAL",
+    "totaldiscs": "DISCTOTAL",
+}
+# ID3v2 stores "07/12"; Vorbis keeps the number and the total in separate tags
+SPLIT_TOTALS = {"TRACKNUMBER": "TRACKTOTAL", "DISCNUMBER": "DISCTOTAL"}
 
 
 @dataclass(frozen=True)
@@ -209,13 +222,56 @@ def probe_tags(path: Path) -> list[tuple[str, str]]:
     return tags
 
 
+def vorbis_tags(path: Path) -> list[tuple[str, str]]:
+    """The file's own Vorbis comments, exactly as stored: same keys, same case,
+    duplicates kept. This is what a player reads."""
+    result = subprocess.run(
+        ["metaflac", "--no-utf8-convert", "--export-tags-to=-", str(path)],
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+    )
+    tags: list[tuple[str, str]] = []
+    for line in (result.stdout or "").splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key:
+            tags.append((key, value))
+    return tags
+
+
+def source_tags(path: Path) -> list[tuple[str, str]]:
+    """Tags to write into the output.
+
+    The file's own Vorbis comments win, because they carry the keys players
+    expect. A non-standard ID3v2 tag is only read for tags the Vorbis block does
+    not have, and its names are translated back to Vorbis spellings.
+    """
+    tags = vorbis_tags(path)
+    seen = {key.upper() for key, _ in tags}
+    for key, value in probe_tags(path):
+        name = CANONICAL_KEYS.get(key.lower(), key.upper())
+        pairs = [(name, value)]
+        if name in SPLIT_TOTALS:
+            number, separator, total = value.partition("/")
+            pairs = [(name, number if separator else value)]
+            if separator and total:
+                pairs.append((SPLIT_TOTALS[name], total))
+        for tag_name, tag_value in pairs:
+            if tag_name in seen:
+                continue
+            tags.append((tag_name, tag_value))
+            seen.add(tag_name)
+    return tags
+
+
 def copy_tags(source: Path, target: Path) -> None:
     """Write the source's tags into the output as Vorbis comments.
 
-    ffmpeg's own metadata handling is bypassed on purpose: the ffprobe view
-    includes an ID3v2 tag, so tags survive even where ffmpeg would drop them.
+    ffmpeg's own metadata handling is bypassed on purpose: reading tags through
+    ffprobe alone renames TRACKNUMBER to track, DISCNUMBER to disc and
+    ALBUMARTIST to album_artist, which is why a player shows no track numbers.
     """
-    tags = probe_tags(source)
+    tags = source_tags(source)
     subprocess.run(
         ["metaflac", "--remove-all-tags", str(target)],
         check=True,
@@ -457,6 +513,7 @@ def peak_level(path: Path) -> float | None:
             "-map", "0:a", "-af", "volumedetect", "-f", "null", "-",
         ],
         capture_output=True,
+        check=False,
         encoding="utf-8",
     )
     # fmt: on
@@ -476,6 +533,7 @@ def decoded_pcm_hash(path: Path) -> str | None:
             "-map", "0:a", "-f", "s16le", "-acodec", "pcm_s16le", "-",
         ],
         capture_output=True,
+        check=False,
     )
     # fmt: on
     if not result.stdout:
@@ -488,6 +546,7 @@ def decode_failure(path: Path) -> str | None:
     result = subprocess.run(
         ["flac", "-t", "-s", str(path)],
         capture_output=True,
+        check=False,
         encoding="utf-8",
     )
     if result.returncode == 0:
@@ -536,15 +595,15 @@ def check_output(entry: Entry, target_root: Path) -> tuple[list[str], list[str]]
         )
     source_pictures, _ = read_metadata(entry.source)
     target_pictures, target_tags = read_metadata(target)
-    source_tags = normalise_tags(probe_tags(entry.source))
+    expected_tags = normalise_tags(source_tags(entry.source))
     if source_pictures != target_pictures:
         problems.append(
             f"cover art changed: {target} has pictures of {target_pictures} bytes, "
             f"source has {source_pictures}"
         )
-    if source_tags != target_tags:
-        missing = sorted(source_tags - target_tags)
-        extra = sorted(target_tags - source_tags)
+    if expected_tags != target_tags:
+        missing = sorted(expected_tags - target_tags)
+        extra = sorted(target_tags - expected_tags)
         detail = []
         if missing:
             detail.append(f"lacks {missing}")
