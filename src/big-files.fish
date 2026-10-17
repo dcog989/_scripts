@@ -13,6 +13,9 @@ function big-files --description 'Recurse project directory for over-sized files
     if test (count $argv) -gt 0
         set base $argv[1]
     end
+    # Normalized so the awk group can strip it as a literal prefix (fd echoes
+    # --search-path verbatim).
+    set base (path normalize -- $base)
 
     set -l tab (printf '\t')
 
@@ -29,8 +32,8 @@ function big-files --description 'Recurse project directory for over-sized files
     end
     set -l root_list (string join "$tab" $roots)
 
-    fd -t f -e js -e ts -e jsx -e tsx -e svelte -e slint -e rs -e py -e c -e cpp -e h -e hpp -e go -e rb -e php -e css -e scss -e html -e sql -e sh -e fish --search-path "$base" -x wc -l | awk -v roots="$root_list" -v project="$project" '
-        BEGIN { n = split(roots, R, "\t") }
+    fd -t f -e js -e ts -e jsx -e tsx -e svelte -e slint -e rs -e py -e c -e cpp -e h -e hpp -e go -e rb -e php -e css -e scss -e html -e sql -e sh -e fish --search-path "$base" -x wc -l | awk -v roots="$root_list" -v project="$project" -v base="$base" '
+        BEGIN { n = split(roots, R, "\t"); off = (base == "/" ? 1 : length(base) + 1) }
         {
             count = $1
             $1 = ""
@@ -46,11 +49,14 @@ function big-files --description 'Recurse project directory for over-sized files
                         best = R[i]
                     }
                 }
-                if (best == "") {
-                    split(path, parts, "/")
-                    best = (parts[3] == "" ? "." : parts[2])
+                if (best != "") {
+                    best = substr(best, off + 1)
+                } else {
+                    # Group = first path component under base.
+                    rel = substr(path, off + 1)
+                    if (index(rel, "/") == 0) best = "."
+                    else { split(rel, parts, "/"); best = parts[1] }
                 }
-                sub(/^\.\//, "", best)
             }
             print best "\t" count "\t" path
         }' | sort -t "$tab" -k1,1 -k2,2nr | awk -F "$tab" '
