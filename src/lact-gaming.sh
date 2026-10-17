@@ -151,6 +151,8 @@ _launch() {
         mapfile -d '' -t env_args < "/proc/$src/environ" || true
     else
         env_args=(
+            # the apps are absolute paths, but anything they spawn needs a PATH
+            "PATH=/usr/local/bin:/usr/bin"
             "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$uid}"
             "DBUS_SESSION_BUS_ADDRESS=${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$uid/bus}"
         )
