@@ -281,17 +281,19 @@ else
     health=$(printf '%s\n' "$info" | awk -F': *' 'tolower($1) ~ /overall-health self-assessment test result/ {print $2; exit}')
     attrs=$(run_priv smartctl -A "$dev" 2>&1 || true)
     crit=$(printf '%s\n' "$attrs" | grep -Ei 'Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect|Media and Data Integrity Errors|Error Information Log Entries|Percentage Used|Available Spare' || true)
+    dev_bad=0
     counters_bad=0
     printf '%s\n' "$attrs" | awk '/Media and Data Integrity Errors|Error Information Log Entries|Reallocated_Sector_Ct|Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect/ {if ($NF + 0 > 0) f = 1} END {exit !f}' && counters_bad=1
 
     case "$health" in
       "")      verdict=unavailable ;;
       PASSED*) verdict=PASSED ;;
-      *)       verdict="$health"; bad=1 ;;
+      *)       verdict="$health"; dev_bad=1 ;;
     esac
-    [ "$counters_bad" -eq 1 ] && bad=1
+    [ "$counters_bad" -eq 1 ] && dev_bad=1
+    [ "$dev_bad" -eq 1 ] && bad=1
 
-    if [ "$bad" -eq 1 ]; then
+    if [ "$dev_bad" -eq 1 ]; then
       body="$(append "$body")${body:+$'\n\n'}$dev: $verdict"
       [ -n "$crit" ] && body="$body"$'\n'"$crit"
       [ "$counters_bad" -eq 1 ] && body="$body"$'\n'"nonzero drive error counters"
