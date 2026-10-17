@@ -4,7 +4,7 @@
 
 - Name: scripts
 - Description: Collection of fish functions and shell scripts for maintaining an Arch-based (CachyOS) system and its git repositories.
-- Tech: fish shell, bash, pacman/paccache, yay (AUR), git, jq, curl, kscreen-doctor.
+- Tech: fish shell, bash, python3, pacman/paccache, yay (AUR), git, jq, curl, kscreen-doctor, ffmpeg, metaflac.
 
 ## Key Files
 
@@ -19,6 +19,7 @@ All scripts live in `src/`:
 - `src/lact-gaming.sh` — LACT Gaming hook: switch refresh rate and park/restore tray apps.
 - `src/opencode-maintenance.sh` — back up, prune (dead-path, legacy, age) and VACUUM the OpenCode DB; clean snapshot dirs; rotate its log.
 - `src/health-check.sh` — read-only report of system-wide issues (units, packages, logs, Btrfs, SMART).
+- `src/flac-conversion/flac-conversion.py` — scan a FLAC tree, transcode anything above 16-bit/48 kHz into a separate tree, verify the outputs.
 - `README.md` — usage and overview.
 
 ## Workflow

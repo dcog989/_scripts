@@ -15,6 +15,7 @@ A collection of scripts for maintaining an Arch-based (CachyOS) system and its g
 | `src/lact-gaming.sh` | bash script | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
 | `src/opencode-maintenance.sh` | bash script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | `src/health-check.sh` | bash script | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
+| `src/flac-conversion/flac-conversion.py` | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
 
 ## Install
 
@@ -202,3 +203,22 @@ Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and 
 Suppressed patterns are extended regexes: built-in defaults plus any lines in `~/.config/health-check/ignore` (override with `HEALTH_CHECK_IGNORE`). Run with `-v` to see the unfiltered output before adding a pattern.
 
 Requires `systemctl`, `journalctl`, `pacman`. Optional: `paccheck` (pacutils), `btrfs-progs`, `smartmontools`. Btrfs mounts and block devices are auto-detected; override with `BTRFS_MOUNTS` / `SMART_DEVICES`. `MAX_LINES` (default 25) caps lines shown per findings list.
+
+---
+
+## flac-conversion
+
+Caps a FLAC library at 16-bit / 48 kHz without leaving each file's rate family. It only ever lowers rate (88.2 family → 44.1 kHz, 96 family → 48 kHz) and bit depth (anything above 16 bit → 16 bit, dithered), and never modifies the source tree — output goes to a separate target tree.
+
+`scan` reads just the STREAMINFO block of every file, prints the rate/bit-depth mix, flags anything unreadable or not really FLAC, and writes the job list. `convert` transcodes that list with `ffmpeg`'s SoXr resampler in parallel, skipping outputs that already have the right format and writing each file via a `.part` rename. `verify` re-reads every output and compares rate, bit depth, channel count, `PICTURE` block count and tags against its source.
+
+```sh
+./src/flac-conversion/flac-conversion.py scan                  # report + write job list
+./src/flac-conversion/flac-conversion.py convert --dry-run     # print the ffmpeg commands
+./src/flac-conversion/flac-conversion.py convert --jobs 4      # transcode into the target tree
+./src/flac-conversion/flac-conversion.py verify                # check outputs before replacing sources
+```
+
+Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 4`. Replacing or deleting the originals is deliberately not implemented.
+
+Requires `ffmpeg` (with `libsoxr`) and `metaflac`.
