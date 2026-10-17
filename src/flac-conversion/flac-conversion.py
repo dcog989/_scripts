@@ -659,7 +659,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.job_list.exists():
         print(f"no job list at {args.job_list}; run scan first", file=sys.stderr)
         return 1
-    entries = read_job_list(args.job_list)
+    try:
+        entries = read_job_list(args.job_list)
+    except ValueError as error:
+        print(f"{args.job_list}: {error}", file=sys.stderr)
+        return 1
 
     if args.mode == "convert":
         print(
