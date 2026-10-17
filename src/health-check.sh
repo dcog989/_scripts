@@ -54,7 +54,7 @@ Usage:
   health-check.sh            full report (prompts for sudo when needed)
   health-check.sh -q         quick: skip the paccheck md5sum sweep
   health-check.sh -v         verbose: raw output, no benign-noise filter
-  health-check.sh --no-sudo  skip privileged checks (Btrfs, SMART, dmesg)
+  health-check.sh --no-sudo  skip privileged checks (no effect when run as root)
 
 Env:
   MAX_LINES=25     max lines shown per findings list
@@ -127,10 +127,10 @@ if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
 fi
 
 PRIV=0
-if [ "$USE_SUDO" -eq 1 ]; then
-  if [ "$(id -u)" -eq 0 ]; then
-    PRIV=1
-  elif [ -n "$SUDO" ] && sudo -n true 2>/dev/null; then
+if [ "$(id -u)" -eq 0 ]; then
+  PRIV=1
+elif [ "$USE_SUDO" -eq 1 ]; then
+  if [ -n "$SUDO" ] && sudo -n true 2>/dev/null; then
     PRIV=1
   elif [ -n "$SUDO" ] && [ -t 0 ] && sudo -v 2>/dev/null; then
     PRIV=1

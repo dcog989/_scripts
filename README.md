@@ -196,7 +196,7 @@ Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and 
 ./src/health-check.sh              # full report (only findings shown)
 ./src/health-check.sh -q           # skip the paccheck md5sum sweep
 ./src/health-check.sh -v           # verbose: raw output, no noise filter
-./src/health-check.sh --no-sudo    # skip privileged checks
+./src/health-check.sh --no-sudo    # skip privileged checks (no effect as root)
 ```
 
 Suppressed patterns are extended regexes: built-in defaults plus any lines in `~/.config/health-check/ignore` (override with `HEALTH_CHECK_IGNORE`). Run with `-v` to see the unfiltered output before adding a pattern.
