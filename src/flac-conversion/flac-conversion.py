@@ -117,6 +117,7 @@ def describe_file(path: Path) -> str:
     """Identify why a file could not be read, from its leading bytes."""
     try:
         head = read_head(path, HEAD_BYTES)
+        size = path.stat().st_size
     except OSError as error:
         return str(error)
     if not head:
@@ -128,7 +129,7 @@ def describe_file(path: Path) -> str:
             return f"FLAC with a {tag_length}-byte ID3v2 tag prepended"
         return f"ID3v2 tag with no FLAC header after it ({tag_length} bytes)"
     if head.startswith(b"fLaC"):
-        return f"truncated FLAC (only {len(head)} bytes, STREAMINFO needs {STREAMINFO_SIZE})"
+        return f"truncated FLAC (only {size} bytes, STREAMINFO needs {STREAMINFO_SIZE})"
     for magic, name in CONTAINER_MAGIC:
         if head.startswith(magic):
             return name
