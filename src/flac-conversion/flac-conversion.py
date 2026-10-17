@@ -470,10 +470,15 @@ def verify(entries: list[Entry], target_root: Path) -> list[str]:
                 f"cover art count changed: {target} has {target_pictures}, "
                 f"source has {source_pictures}"
             )
-        if source_tags - target_tags:
-            problems.append(
-                f"tags missing: {target} lacks {sorted(source_tags - target_tags)}"
-            )
+        if source_tags != target_tags:
+            missing = sorted(source_tags - target_tags)
+            extra = sorted(target_tags - source_tags)
+            detail = []
+            if missing:
+                detail.append(f"lacks {missing}")
+            if extra:
+                detail.append(f"has extra {extra}")
+            problems.append(f"tags differ: {target} {', '.join(detail)}")
     return problems
 
 
