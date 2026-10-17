@@ -43,6 +43,7 @@ STREAMINFO_SIZE = 42
 HEAD_BYTES = 64
 ID3V2_HEADER_SIZE = 10
 LENGTH_TOLERANCE_SAMPLES = 1
+CLIP_PEAK_DB = 0.0
 CONTAINER_MAGIC = (
     (b"OggS", "Ogg container (Vorbis, Opus or FLAC-in-Ogg)"),
     (b"RIFF", "RIFF container (WAV)"),
@@ -54,7 +55,7 @@ CONTAINER_MAGIC = (
 MODE_TOOLS = {
     "scan": (),
     "convert": ("flac", "ffmpeg", "ffprobe", "metaflac"),
-    "verify": ("flac", "ffprobe", "metaflac"),
+    "verify": ("flac", "ffmpeg", "ffprobe", "metaflac"),
 }
 FFPROBE_TAG_ENTRY = "format_tags"
 FFPROBE_TAG_PREFIX = "TAG:"
@@ -408,6 +409,25 @@ def summarise(counts: collections.Counter[str], total: int) -> str:
     )
 
 
+def peak_level(path: Path) -> float | None:
+    """Highest sample level in dB from a decode pass; None when unreadable."""
+    # fmt: off
+    result = subprocess.run(
+        [
+            "ffmpeg", "-nostdin", "-hide_banner",
+            "-i", str(path),
+            "-map", "0:a", "-af", "volumedetect", "-f", "null", "-",
+        ],
+        capture_output=True,
+        encoding="utf-8",
+    )
+    # fmt: on
+    for line in (result.stderr or "").splitlines():
+        if "max_volume:" in line:
+            return float(line.split("max_volume:")[1].split()[0])
+    return None
+
+
 def decode_failure(path: Path) -> str | None:
     """Run the reference decoder over the whole file; None when it is clean."""
     result = subprocess.run(
@@ -425,8 +445,9 @@ def decode_failure(path: Path) -> str | None:
     return lines[0] if lines else "decoder exited non-zero"
 
 
-def verify(entries: list[Entry], target_root: Path) -> list[str]:
+def verify(entries: list[Entry], target_root: Path) -> tuple[list[str], list[str]]:
     problems: list[str] = []
+    warnings: list[str] = []
     for done, entry in enumerate(entries, start=1):
         report_progress(done, len(entries), "verifying")
         target = target_root / entry.relative
@@ -479,7 +500,14 @@ def verify(entries: list[Entry], target_root: Path) -> list[str]:
             if extra:
                 detail.append(f"has extra {extra}")
             problems.append(f"tags differ: {target} {', '.join(detail)}")
-    return problems
+        if entry.rate != entry.current.rate or entry.bits != entry.current.bits:
+            peak = peak_level(target)
+            if peak is not None and peak >= CLIP_PEAK_DB:
+                warnings.append(
+                    f"possible clipping: {target} has samples at full scale "
+                    f"({abs(peak):g} dB)"
+                )
+    return problems, warnings
 
 
 def plural(count: int, noun: str) -> str:
@@ -616,7 +644,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{summarise(counts, len(entries))}")
         return 1 if failures else 0
 
-    problems = verify(entries, target)
+    problems, warnings = verify(entries, target)
+    for warning in warnings:
+        print(warning, file=sys.stderr)
     for problem in problems:
         print(problem, file=sys.stderr)
     print(f"\n{len(entries) - len(problems)}/{len(entries)} outputs match their source")
