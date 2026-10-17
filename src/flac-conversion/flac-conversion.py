@@ -42,6 +42,7 @@ PROGRESS_INTERVAL = 500
 STREAMINFO_SIZE = 42
 HEAD_BYTES = 64
 ID3V2_HEADER_SIZE = 10
+LENGTH_TOLERANCE_SAMPLES = 1
 CONTAINER_MAGIC = (
     (b"OggS", "Ogg container (Vorbis, Opus or FLAC-in-Ogg)"),
     (b"RIFF", "RIFF container (WAV)"),
@@ -64,6 +65,7 @@ class StreamInfo:
     rate: int
     bits: int
     channels: int
+    samples: int
 
 
 @dataclass(frozen=True)
@@ -81,7 +83,7 @@ def read_head(path: Path, size: int) -> bytes:
 
 
 def read_streaminfo(path: Path) -> StreamInfo:
-    """Read rate/bit depth/channels from a FLAC STREAMINFO header block."""
+    """Read rate, bit depth, channels and sample count from a FLAC STREAMINFO."""
     head = read_head(path, HEAD_BYTES)
     offset = id3v2_length(head)
     if offset:
@@ -94,7 +96,8 @@ def read_streaminfo(path: Path) -> StreamInfo:
     rate = (packed[0] << 12) | (packed[1] << 4) | (packed[2] >> 4)
     channels = ((packed[2] >> 1) & 0x07) + 1
     bits = (((packed[2] & 0x01) << 4) | (packed[3] >> 4)) + 1
-    return StreamInfo(rate, bits, channels)
+    samples = ((packed[3] & 0x0F) << 32) | int.from_bytes(packed[4:8])
+    return StreamInfo(rate, bits, channels, samples)
 
 
 def id3v2_length(head: bytes) -> int:
@@ -281,7 +284,7 @@ def write_job_list(path: Path, entries: list[Entry]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
         f"{e.source}\t{e.relative}\t{e.current.rate}\t{e.current.bits}"
-        f"\t{e.current.channels}\t{e.rate}\t{e.bits}"
+        f"\t{e.current.channels}\t{e.current.samples}\t{e.rate}\t{e.bits}"
         for e in entries
     ]
     path.write_text("\n".join(lines) + ("\n" if lines else ""))
@@ -290,12 +293,21 @@ def write_job_list(path: Path, entries: list[Entry]) -> None:
 def read_job_list(path: Path) -> list[Entry]:
     entries: list[Entry] = []
     for line in path.read_text().splitlines():
-        source, relative, rate, bits, channels, out_rate, out_bits = line.split("\t")
+        (
+            source,
+            relative,
+            rate,
+            bits,
+            channels,
+            samples,
+            out_rate,
+            out_bits,
+        ) = line.split("\t")
         entries.append(
             Entry(
                 Path(source),
                 Path(relative),
-                StreamInfo(int(rate), int(bits), int(channels)),
+                StreamInfo(int(rate), int(bits), int(channels), int(samples)),
                 int(out_rate),
                 int(out_bits),
             )
@@ -438,6 +450,17 @@ def verify(entries: list[Entry], target_root: Path) -> list[str]:
             problems.append(
                 f"wrong format: {target} is {info.rate} Hz/{info.bits} bit/{info.channels} ch, "
                 f"expected {entry.rate} Hz/{entry.bits} bit/{entry.current.channels} ch"
+            )
+        ratio = entry.rate / entry.current.rate
+        expected_samples = round(entry.current.samples * ratio)
+        if (
+            entry.current.samples
+            and abs(info.samples - expected_samples) > LENGTH_TOLERANCE_SAMPLES
+        ):
+            problems.append(
+                f"wrong length: {target} has {info.samples} samples, expected "
+                f"{expected_samples} from {entry.current.samples} at "
+                f"{entry.current.rate} Hz"
             )
         source_pictures, _ = read_metadata(entry.source)
         target_pictures, target_tags = read_metadata(target)
