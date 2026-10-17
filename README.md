@@ -208,9 +208,9 @@ Requires `systemctl`, `journalctl`, `pacman`. Optional: `paccheck` (pacutils), `
 
 ## flac-conversion
 
-Caps a FLAC library at 16-bit / 48 kHz without leaving each file's rate family. It only ever lowers rate (88.2 family → 44.1 kHz, 96 family → 48 kHz) and bit depth (anything above 16 bit → 16 bit, dithered), and never modifies the source tree — output goes to a separate target tree.
+Caps a FLAC library at 16-bit / 48 kHz without leaving each file's rate family, and rewrites any file carrying a non-standard ID3v2 tag in front of its FLAC stream. It only ever lowers rate (88.2 family → 44.1 kHz, 96 family → 48 kHz) and bit depth (anything above 16 bit → 16 bit, dithered), and never modifies the source tree — output goes to a separate target tree.
 
-`scan` reads just the STREAMINFO block of every file, prints the rate/bit-depth mix, flags anything unreadable or not really FLAC, and writes the job list. `convert` transcodes that list with `ffmpeg`'s SoXr resampler in parallel, skipping outputs that already have the right format and writing each file via a `.part` rename. `verify` re-reads every output and compares rate, bit depth, channel count, `PICTURE` block count and tags against its source.
+`scan` reads just the STREAMINFO block of every file, prints the rate/bit-depth mix, flags anything unreadable or not really FLAC, and writes the job list. `convert` transcodes that list with `ffmpeg`'s SoXr resampler in parallel, skipping outputs that already have the right format and writing each file via a `.part` rename; tags are copied across with `metaflac` from the `ffprobe` view, so metadata that lives only in an ID3v2 tag survives the rewrite that removes that tag. `verify` re-reads every output and compares rate, bit depth, channel count, `PICTURE` block count and tags against its source.
 
 ```sh
 ./src/flac-conversion/flac-conversion.py scan                  # report + write job list

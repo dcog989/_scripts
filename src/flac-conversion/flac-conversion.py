@@ -2,8 +2,11 @@
 """Cap a FLAC library at 16-bit / 48 kHz, keeping the rate family.
 
 Anything above 48 kHz is downsampled (44.1 family to 44.1 kHz, 48 family to
-48 kHz) and anything above 16 bit is reduced to 16 bit with dither. Sources are
-never modified: output goes to a separate target tree.
+48 kHz) and anything above 16 bit is reduced to 16 bit with dither. Files
+carrying a non-standard ID3v2 tag in front of the FLAC stream are rewritten
+without it, whatever their rate and depth. Sources are never modified: output
+goes to a separate target tree. Tags and cover art are carried over explicitly,
+not left to the encoder.
 
 Modes:
     scan     report the library's rate/bit-depth mix, write the job list
@@ -47,7 +50,13 @@ CONTAINER_MAGIC = (
     (b"APETAGEX", "APE tag"),
     (b"\x00\x00\x00\x00", "all-zero header (truncated or sparse file)"),
 )
-MODE_TOOLS = {"scan": (), "convert": ("ffmpeg",), "verify": ("metaflac",)}
+MODE_TOOLS = {
+    "scan": (),
+    "convert": ("ffmpeg", "ffprobe", "metaflac"),
+    "verify": ("ffprobe", "metaflac"),
+}
+FFPROBE_TAG_ENTRY = "format_tags"
+FFPROBE_TAG_PREFIX = "TAG:"
 
 
 @dataclass(frozen=True)
@@ -130,12 +139,18 @@ def describe_file(path: Path) -> str:
     )
 
 
+def normalise_tags(tags: list[tuple[str, str]]) -> set[str]:
+    """Compare tags case-insensitively by key, but not by value."""
+    return {f"{key.lower()}={value}" for key, value in tags}
+
+
 def read_metadata(path: Path) -> tuple[int, set[str]]:
     """Count PICTURE blocks and collect VORBIS_COMMENT tags in one pass."""
     # metaflac exits 1 when a file has neither block, which is a normal result here
     result = subprocess.run(
         [
             "metaflac",
+            "--no-utf8-convert",
             "--list",
             "--block-type=PICTURE",
             "--block-type=VORBIS_COMMENT",
@@ -143,20 +158,72 @@ def read_metadata(path: Path) -> tuple[int, set[str]]:
         ],
         capture_output=True,
         check=False,
-        text=True,
+        encoding="utf-8",
     )
     output = result.stdout or ""
     pictures = output.count("type: 6 (PICTURE)")
-    tags = {
-        line.split(": ", 1)[1].lower()
-        for line in output.splitlines()
-        if line.strip().startswith("comment[")
-    }
-    return pictures, tags
+    tags: list[tuple[str, str]] = []
+    for line in output.splitlines():
+        if line.strip().startswith("comment["):
+            key, _, value = line.split(": ", 1)[1].partition("=")
+            tags.append((key, value))
+    return pictures, normalise_tags(tags)
 
 
-def needs_conversion(info: StreamInfo) -> bool:
-    return info.rate > RATE_CAP or info.bits > BITS_CAP
+def probe_tags(path: Path) -> list[tuple[str, str]]:
+    """Tags as ffprobe sees them, which includes a non-standard ID3v2 tag."""
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            FFPROBE_TAG_ENTRY,
+            "-of",
+            "default=noprint_wrappers=1",
+            str(path),
+        ],
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+    )
+    tags: list[tuple[str, str]] = []
+    for line in (result.stdout or "").splitlines():
+        if not line.startswith(FFPROBE_TAG_PREFIX):
+            continue
+        key, _, value = line[len(FFPROBE_TAG_PREFIX) :].partition("=")
+        if key:
+            tags.append((key, value))
+    return tags
+
+
+def copy_tags(source: Path, target: Path) -> None:
+    """Write the source's tags into the output as Vorbis comments.
+
+    ffmpeg's own metadata handling is bypassed on purpose: the ffprobe view
+    includes an ID3v2 tag, so tags survive even where ffmpeg would drop them.
+    """
+    tags = probe_tags(source)
+    subprocess.run(
+        ["metaflac", "--remove-all-tags", str(target)],
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+    )
+    if not tags:
+        return
+    payload = "".join(f"{key}={value}\n" for key, value in tags)
+    subprocess.run(
+        ["metaflac", "--no-utf8-convert", "--import-tags-from=-", str(target)],
+        input=payload,
+        encoding="utf-8",
+        check=True,
+        capture_output=True,
+    )
+
+
+def needs_conversion(info: StreamInfo, tag_length: int) -> bool:
+    return info.rate > RATE_CAP or info.bits > BITS_CAP or tag_length > 0
 
 
 def target_format(info: StreamInfo) -> tuple[int, int]:
@@ -203,7 +270,7 @@ def scan(
             problems.append((path, str(error)))
             continue
         mix[(info.rate, info.bits)] += 1
-        if needs_conversion(info):
+        if needs_conversion(info, tag_length):
             rate, bits = target_format(info)
             entries.append(Entry(path, path.relative_to(source), info, rate, bits))
 
@@ -246,15 +313,19 @@ def build_command(entry: Entry, temporary: Path) -> list[str]:
         # second stage: no rate change, so this only converts format, with dither
         stages.append(f"aresample=osf=s16:dither_method={DITHER_METHOD}")
     # fmt: off
-    return [
+    command = [
         "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y",
         "-i", str(entry.source),
-        "-map", "0", "-map_metadata", "0",
-        "-af", ",".join(stages),
+        "-map", "0",
+    ]
+    if stages:
+        command += ["-af", ",".join(stages)]
+    command += [
         "-c:a", "flac", "-compression_level", str(FLAC_COMPRESSION),
         "-c:v", "copy",
         "-f", "flac", str(temporary),
     ]
+    return command
     # fmt: on
 
 
@@ -274,17 +345,17 @@ def convert_one(entry: Entry, target_root: Path, dry_run: bool) -> str:
         return "skipped"
     if dry_run:
         print(" ".join(build_command(entry, target)))
+        print(f"then: copy tags from {entry.source} to {target}")
         return "planned"
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(target.name + ".part")
     try:
         subprocess.run(build_command(entry, temporary), check=True)
+        copy_tags(entry.source, temporary)
         os.replace(temporary, target)
-    except subprocess.CalledProcessError as error:
+    except (subprocess.CalledProcessError, OSError) as error:
         temporary.unlink(missing_ok=True)
-        raise RuntimeError(
-            f"ffmpeg failed ({error.returncode}): {entry.source}"
-        ) from error
+        raise RuntimeError(f"failed: {entry.source} ({error})") from error
     return "converted"
 
 
@@ -344,8 +415,9 @@ def verify(entries: list[Entry], target_root: Path) -> list[str]:
                 f"wrong format: {target} is {info.rate} Hz/{info.bits} bit/{info.channels} ch, "
                 f"expected {entry.rate} Hz/{entry.bits} bit/{entry.current.channels} ch"
             )
-        source_pictures, source_tags = read_metadata(entry.source)
+        source_pictures, _ = read_metadata(entry.source)
         target_pictures, target_tags = read_metadata(target)
+        source_tags = normalise_tags(probe_tags(entry.source))
         if source_pictures != target_pictures:
             problems.append(
                 f"cover art count changed: {target} has {target_pictures}, "
@@ -379,9 +451,7 @@ def report_problems(problems: list[tuple[Path, str]], source: Path) -> None:
         print(f"  {plural(count, 'file'):>9}  {folder}  -- {reason}", file=sys.stderr)
 
 
-def report_tagged(
-    tagged: list[tuple[Path, int]], source: Path, queued: set[Path]
-) -> None:
+def report_tagged(tagged: list[tuple[Path, int]], source: Path) -> None:
     """Group ID3v2-tagged files by folder so each affected album is visible."""
     if not tagged:
         return
@@ -390,20 +460,15 @@ def report_tagged(
         by_folder[str(path.parent.relative_to(source))].append(tag_length)
     print(
         f"\n{plural(len(tagged), 'file')} with a non-standard ID3v2 tag in front of the"
-        " FLAC stream (only dropped when a file is converted):",
+        " FLAC stream (rewritten to drop the tag, tags and cover art carried over):",
         file=sys.stderr,
     )
     for folder in sorted(by_folder, key=lambda key: (-len(by_folder[key]), key)):
         lengths = sorted(set(by_folder[folder]))
         span = f"{lengths[0]}" if len(lengths) == 1 else f"{lengths[0]}-{lengths[-1]}"
-        converting = sum(
-            1
-            for path, _ in tagged
-            if str(path.parent.relative_to(source)) == folder and path in queued
-        )
         print(
             f"  {plural(len(by_folder[folder]), 'file'):>9}  {folder}"
-            f"  -- ID3v2 tag of {span} bytes, {converting} of them in the job list",
+            f"  -- ID3v2 tag of {span} bytes",
             file=sys.stderr,
         )
 
@@ -469,7 +534,7 @@ def main(argv: list[str] | None = None) -> int:
         entries, problems, mix, tagged = scan(args.source)
         report_mix(mix)
         report_problems(problems, args.source)
-        report_tagged(tagged, args.source, {entry.source for entry in entries})
+        report_tagged(tagged, args.source)
         write_job_list(args.job_list, entries)
         total = sum(mix.values())
         excluded = (
