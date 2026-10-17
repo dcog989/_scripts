@@ -14,7 +14,7 @@ A file is converted when it is above 16 bit, above 48 kHz, **or** carries a non-
 | 88.2 / 176.4 / 352.8 kHz, above 16 bit | 44.1 kHz, 16 bit | dithered |
 | 24 bit at 44.1 / 48 kHz | same rate, 16 bit | dithered |
 | 16 bit at 88.2 / 96 kHz and above | family rate, 16 bit | no depth change, so no dither |
-| any FLAC with a leading ID3v2 tag | same rate and depth | rewritten to drop the tag, tags and art carried over |
+| any FLAC with a leading ID3v2 tag | same rate and depth | rewritten to drop the tag and any ID3v1 trailer, tags and art carried over |
 | 16 bit at 44.1 / 48 kHz, no ID3v2 tag | untouched | not in the job list |
 
 Rate is only ever lowered, by 2:1 where the family allows it. Bit depth is only ever lowered, to 16.
@@ -32,7 +32,7 @@ Rate is only ever lowered, by 2:1 where the family allows it. Bit depth is only 
 
 Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 4`.
 
-`scan` reads only the file header (STREAMINFO, skipping a non-standard ID3v2 tag placed in front of the FLAC stream — those files are read and listed per folder with the tag's size, since they are all rewritten) and reports anything unreadable or not actually FLAC, grouped by folder with the container it did find — MP3, Ogg, MP4/ALAC, WAV, truncated header, empty file — instead of a generic parse error. `convert` skips outputs that already exist with the right rate and bit depth, writes to `<name>.flac.part`, copies the tags across, confirms the new file decodes with `flac -t` (ffmpeg exits 0 even when it logs FLAC decode errors, so its status is not trusted), and renames on success — it keeps going when one file fails, and the exit code is non-zero if any did.
+`scan` reads only the file header (STREAMINFO, skipping a non-standard ID3v2 tag placed in front of the FLAC stream — those files are read and listed per folder with the tag's size, since they are all rewritten) and reports anything unreadable or not actually FLAC, grouped by folder with the container it did find — MP3, Ogg, MP4/ALAC, WAV, truncated header, empty file — instead of a generic parse error. `convert` skips outputs that already exist with the right rate and bit depth, writes to `<name>.flac.part`, copies the tags across, drops the trailing ID3v1 tag that ID3v2-tagged files also carry (ffmpeg muxes it as audio, and the decoder rejects anything after the last frame), confirms the new file decodes with `flac -t` (ffmpeg exits 0 even when it logs FLAC decode errors, so its status is not trusted), and renames on success — it keeps going when one file fails, and the exit code is non-zero if any did.
 
 `verify` decodes every output end to end with `flac -t` (so a truncated or corrupt file is caught before its tags are even looked at), then compares rate, bit depth, channel count, sample count (scaled by the rate change) and `PICTURE` block count against the source, and requires the tag set to match exactly — missing and extra tags both fail (the source's tags come from the ffprobe view, so a stray ID3v2 tag counts as a source of tags). It exits non-zero on any mismatch. When an output's rate or bit depth changed, it also measures the peak level and warns without failing about samples at full scale, which is where a resample that overshot would have clipped. When neither changed — the ID3v2-tag-only rewrites — it decodes both sides to raw PCM and requires the MD5 to match, since stripping the wrapper must leave the audio untouched. Run it before deleting or replacing originals; that step is deliberately not automated.
 
@@ -47,7 +47,7 @@ Tags survive by not trusting the encoder with them. ffmpeg is given no `-map_met
 - Transcoding is one-way. Keep the originals until `verify` is clean.
 - 88.2 → 48 kHz, if ever forced by a device, is a non-integer resample. The default family-preserving mapping avoids it.
 - 24 → 16 bit is dithered (`triangular_hp`) because undithered truncation turns quantization error into distortion rather than noise.
-- A file rewritten only to drop its ID3v2 tag is still re-encoded: the audio is the same, the file bytes are not.
+- A file rewritten only to drop its ID3v2 and ID3v1 tags keeps its audio frames as they are, but the file bytes differ: the container header is rewritten and ffmpeg's own metadata is replaced by the tags read back from the source.
 - Tag values are compared exactly, keys case-insensitively. A converter that rewrites a value instead of dropping it would pass.
 - Sample counts are compared by scaling the source count by the rate change (the family mappings are exact integer ratios). A source whose STREAMINFO stores no total (`0`, meaning unknown) is not length-checked.
 - Cover art comes from ffmpeg (`-map 0`), which keeps the `PICTURE` blocks as they are. If a source has no embedded art, nothing is added.

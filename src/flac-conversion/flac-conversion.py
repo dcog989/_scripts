@@ -43,6 +43,7 @@ PROGRESS_INTERVAL = 500
 STREAMINFO_SIZE = 42
 HEAD_BYTES = 64
 ID3V2_HEADER_SIZE = 10
+ID3V1_TAG_SIZE = 128
 LENGTH_TOLERANCE_SAMPLES = 1
 CLIP_PEAK_DB = 0.0
 CONTAINER_MAGIC = (
@@ -332,6 +333,11 @@ def read_job_list(path: Path) -> list[Entry]:
     return entries
 
 
+def keeps_rate_and_depth(entry: Entry) -> bool:
+    """True when only the wrapper tags change, so the audio stream is copied as-is."""
+    return entry.rate == entry.current.rate and entry.bits == entry.current.bits
+
+
 def build_command(entry: Entry, temporary: Path) -> list[str]:
     stages: list[str] = []
     if entry.rate != entry.current.rate:
@@ -353,7 +359,7 @@ def build_command(entry: Entry, temporary: Path) -> list[str]:
             "-c:a", "flac", "-compression_level", str(FLAC_COMPRESSION),
         ]
     else:
-        # only the ID3v2 wrapper is being dropped, so the audio stream is copied as-is
+        # only the wrapper tags are being dropped, so the audio stream is copied as-is
         command += ["-c:a", "copy"]
     command += [
         "-c:v", "copy",
@@ -361,6 +367,17 @@ def build_command(entry: Entry, temporary: Path) -> list[str]:
     ]
     return command
     # fmt: on
+
+
+def drop_id3v1(path: Path) -> None:
+    """Delete a trailing ID3v1 tag, which the decoder sees as junk after the audio."""
+    with path.open("r+b") as handle:
+        end = handle.seek(0, os.SEEK_END)
+        if end <= ID3V1_TAG_SIZE:
+            return
+        handle.seek(end - ID3V1_TAG_SIZE)
+        if handle.read(3) == b"TAG":
+            handle.truncate(end - ID3V1_TAG_SIZE)
 
 
 def is_converted(target: Path, entry: Entry) -> bool:
@@ -385,6 +402,9 @@ def convert_one(entry: Entry, target_root: Path, dry_run: bool) -> str:
     temporary = target.with_name(target.name + ".part")
     try:
         subprocess.run(build_command(entry, temporary), check=True)
+        if keeps_rate_and_depth(entry):
+            # the source's ID3v1 trailer is muxed as audio, and it breaks the decode test
+            drop_id3v1(temporary)
         copy_tags(entry.source, temporary)
         # ffmpeg exits 0 on FLAC decode errors, so the output is checked on its own
         if failure := decode_failure(temporary):
