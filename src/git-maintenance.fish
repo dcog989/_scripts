@@ -131,12 +131,12 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         end
 
         # Tracked files matched by the ignore rules, excluding submodule gitlinks.
+        # -s gives mode+path in one call, so gitlinks are filtered without a git
+        # process per file.
         set -l ignored_files
-        for f in (git -C "$repo" ls-files -z -ci --exclude-standard | string split0)
-            set -l entry (git -C "$repo" ls-files -s -z -- "$f" | string split0)
-            set -l mode (string match -r '^[0-9]+' -- $entry)
-            test "$mode" = 160000; and continue
-            set -a ignored_files "$f"
+        for entry in (git -C "$repo" ls-files -s -z -ci --exclude-standard | string split0)
+            string match -qr '^160000 ' -- $entry; and continue
+            set -a ignored_files (string replace -r '^[0-9]+ [0-9a-f]+ [0-9]+\t' '' -- $entry)
         end
         if test (count $ignored_files) -gt 0
             set -a flagged_repos "$name"
