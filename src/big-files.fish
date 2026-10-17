@@ -19,6 +19,9 @@ function big-files --description 'Recurse project directory for over-sized files
 
     set -l tab (printf '\t')
 
+    # Files above this many lines are reported; it also anchors the colour ramp.
+    set -l limit 400
+
     set -l project
     if test -e "$base/.git"
         set project (path basename (path resolve "$base"))
@@ -32,14 +35,14 @@ function big-files --description 'Recurse project directory for over-sized files
     end
     set -l root_list (string join "$tab" $roots)
 
-    fd -t f -e js -e ts -e jsx -e tsx -e svelte -e slint -e rs -e py -e c -e cpp -e h -e hpp -e go -e rb -e php -e css -e scss -e html -e sql -e sh -e fish --search-path "$base" -x wc -l | awk -v roots="$root_list" -v project="$project" -v base="$base" '
+    fd -t f -e js -e ts -e jsx -e tsx -e svelte -e slint -e rs -e py -e c -e cpp -e h -e hpp -e go -e rb -e php -e css -e scss -e html -e sql -e sh -e fish --search-path "$base" -x wc -l | awk -v roots="$root_list" -v project="$project" -v base="$base" -v limit="$limit" '
         BEGIN { n = split(roots, R, "\t"); off = (base == "/" ? 1 : length(base) + 1) }
         {
             count = $1
             $1 = ""
             sub(/^ +/, "")
             path = $0
-            if (count <= 400) next
+            if (count <= limit) next
             if (project != "") {
                 best = project
             } else {
@@ -59,9 +62,9 @@ function big-files --description 'Recurse project directory for over-sized files
                 }
             }
             print best "\t" count "\t" path
-        }' | sort -t "$tab" -k1,1 -k2,2nr | awk -F "$tab" '
+        }' | sort -t "$tab" -k1,1 -k2,2nr | awk -F "$tab" -v limit="$limit" '
     function paint(c,   t, g) {
-        t = (c - 400) / 600
+        t = (c - limit) / 600
         if (t < 0) t = 0
         if (t > 1) t = 1
         g = int(255 * (1 - t))
