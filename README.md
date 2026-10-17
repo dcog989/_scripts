@@ -30,7 +30,7 @@ Shell scripts: mark them executable and symlink them onto your `PATH`.
 
 ```sh
 chmod +x /path/to/src/*.sh
-ln -sf /path/to/src/*.sh ~/.local/bin/
+ln -sf /path/to/src/* ~/.local/bin/
 ```
 
 Most scripts assume the developer environment described in `AGENTS.md` (pacman/paccache, `yay`, `git`, `jq`, `curl`).
