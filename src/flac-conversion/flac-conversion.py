@@ -340,9 +340,14 @@ def build_command(entry: Entry, temporary: Path) -> list[str]:
         "-map", "0",
     ]
     if stages:
-        command += ["-af", ",".join(stages)]
+        command += [
+            "-af", ",".join(stages),
+            "-c:a", "flac", "-compression_level", str(FLAC_COMPRESSION),
+        ]
+    else:
+        # only the ID3v2 wrapper is being dropped, so the audio stream is copied as-is
+        command += ["-c:a", "copy"]
     command += [
-        "-c:a", "flac", "-compression_level", str(FLAC_COMPRESSION),
         "-c:v", "copy",
         "-f", "flac", str(temporary),
     ]
