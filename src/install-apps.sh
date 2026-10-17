@@ -27,6 +27,12 @@ AUR_APPS=(
     "ryzen_smu-dkms-git"
 )
 
+# Both halves are the job: refuse to start rather than install half of it.
+if ! command -v yay >/dev/null 2>&1; then
+    echo "yay not found - install it first: sudo pacman -S yay" >&2
+    exit 1
+fi
+
 echo "Installing Repo apps (CachyOS v3 / Arch)..."
 sudo pacman -S --needed --noconfirm "${REPO_APPS[@]}"
 
