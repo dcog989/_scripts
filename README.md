@@ -1,24 +1,25 @@
 # scripts
 
-A collection of scripts for maintaining an Arch-based (CachyOS) system and its git repositories. Each script is self-contained and can be sourced or run directly.
+A collection of maintenance scripts for CachyOS, git repositories.
 
 ## Contents
 
 | Script | Type | Purpose |
 | --- | --- | --- |
-| `src/repository-clean.fish` | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
-| `src/git-maintenance.fish` | fish function | Safely optimize every git repo under a directory tree and untrack tracked+ignored files. |
-| `src/big-files.fish` | fish function | Report source files over 400 lines, grouped by project. |
-| `src/opencode-update.fish` | fish function | Update the opencode CLI and desktop AppImage. |
-| `src/install-apps.sh` | bash script | Install a fixed set of repo and AUR packages. |
-| `src/lact-gaming.sh` | bash script | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
-| `src/opencode-maintenance.sh` | bash script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
-| `src/health-check.sh` | bash script | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
-| `src/flac-conversion/flac-conversion.py` | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
+| `src/big-files.fish`            | fish function | Report source files over 400 lines, grouped by project. |
+| `src/git-maintenance.fish`      | fish function | Safely optimize every git repo under a directory tree and untrack tracked+ignored files. |
+| `src/health-check.sh`           | shell script | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
+| `src/install-apps.sh`           | shell script | Install a fixed set of repo and AUR packages. |
+| `src/lact-gaming.sh`            | shell script | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
+| `src/music/flac-conversion.py`  | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
+| `src/opencode-maintenance.sh`   | shell script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
+| `src/opencode-update.fish`      | fish function | Update the opencode CLI and desktop AppImage. |
+| `src/repository-clean.fish`     | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
+| `src/stale.sh`                  | shell script | List content not touched for 80 days. |
 
 ## Install
 
-Fish functions: source them directly, or symlink them into your fish functions directory so repo edits take effect immediately.
+Fish functions - run directly, or symlink to fish functions directory:
 
 ```sh
 source /path/to/src/repository-clean.fish
@@ -26,14 +27,12 @@ source /path/to/src/repository-clean.fish
 ln -sf /path/to/src/*.fish ~/.config/fish/functions/
 ```
 
-Shell scripts: mark them executable and symlink them onto your `PATH`.
+Shell scripts - mark executable and symlink to `PATH`:
 
 ```sh
-chmod +x /path/to/src/*.sh
-ln -sf /path/to/src/* ~/.local/bin/
+chmod +x /home/bubba/Projects/_scripts/src/[NAME].sh
+ln -sf /home/bubba/Projects/_scripts/src/[NAME] ~/.local/bin/
 ```
-
-Most scripts assume the developer environment described in `AGENTS.md` (pacman/paccache, `yay`, `git`, `jq`, `curl`).
 
 ---
 
@@ -198,10 +197,10 @@ Caps a FLAC library at 16-bit / 48 kHz without leaving each file's rate family, 
 `scan` reads just the STREAMINFO block of every file, prints the rate/bit-depth mix, flags anything unreadable or not really FLAC, and writes the job list. `convert` transcodes that list with `ffmpeg`'s SoXr resampler in parallel, skipping outputs that already have the right format and writing each file via a `.part` rename; tags are copied with `metaflac` from the source's own Vorbis comment block — exact keys, duplicates kept — with `ffprobe` consulted only for metadata that lives solely in a stray ID3v2 tag, whose names are mapped back to Vorbis spellings. `verify` re-reads every output and compares rate, bit depth, channel count, sample count, `PICTURE` block count and the exact tag set against its source.
 
 ```sh
-./src/flac-conversion/flac-conversion.py scan                  # report + write job list
-./src/flac-conversion/flac-conversion.py convert --dry-run     # print the ffmpeg commands
-./src/flac-conversion/flac-conversion.py convert --jobs 4      # transcode into the target tree
-./src/flac-conversion/flac-conversion.py verify                # check outputs before replacing sources
+./src/music/flac-conversion.py scan                  # report + write job list
+./src/music/flac-conversion.py convert --dry-run     # print the ffmpeg commands
+./src/music/flac-conversion.py convert --jobs 4      # transcode into the target tree
+./src/musci/flac-conversion.py verify                # check outputs before replacing sources
 ```
 
 Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 4`. Replacing or deleting the originals is deliberately not implemented.
