@@ -187,22 +187,3 @@ Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and 
 Suppressed patterns are extended regexes: built-in defaults plus any lines in `~/.config/health-check/ignore` (override with `HEALTH_CHECK_IGNORE`). Run with `-v` to see the unfiltered output before adding a pattern.
 
 Requires `systemctl`, `journalctl`, `pacman`. Optional: `paccheck` (pacutils), `btrfs-progs`, `smartmontools`. Btrfs mounts and block devices are auto-detected; override with `BTRFS_MOUNTS` / `SMART_DEVICES`. `MAX_LINES` (default 25) caps lines shown per findings list.
-
----
-
-## flac-conversion
-
-Caps a FLAC library at 16-bit / 48 kHz without leaving each file's rate family, and rewrites any file carrying a non-standard ID3v2 tag in front of its FLAC stream. It only ever lowers rate (88.2 family → 44.1 kHz, 96 family → 48 kHz) and bit depth (anything above 16 bit → 16 bit, dithered), and never modifies the source tree — output goes to a separate target tree.
-
-`scan` reads just the STREAMINFO block of every file, prints the rate/bit-depth mix, flags anything unreadable or not really FLAC, and writes the job list. `convert` transcodes that list with `ffmpeg`'s SoXr resampler in parallel, skipping outputs that already have the right format and writing each file via a `.part` rename; tags are copied with `metaflac` from the source's own Vorbis comment block — exact keys, duplicates kept — with `ffprobe` consulted only for metadata that lives solely in a stray ID3v2 tag, whose names are mapped back to Vorbis spellings. `verify` re-reads every output and compares rate, bit depth, channel count, sample count, `PICTURE` block count and the exact tag set against its source.
-
-```sh
-./src/music/flac-conversion.py scan                  # report + write job list
-./src/music/flac-conversion.py convert --dry-run     # print the ffmpeg commands
-./src/music/flac-conversion.py convert --jobs 4      # transcode into the target tree
-./src/musci/flac-conversion.py verify                # check outputs before replacing sources
-```
-
-Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 4`. Replacing or deleting the originals is deliberately not implemented.
-
-Requires `ffmpeg` (with `libsoxr`) and `metaflac`.

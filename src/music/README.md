@@ -1,55 +1,22 @@
 # flac-conversion
 
-Caps a FLAC library at 16-bit / 48 kHz, keeping each file in its rate family, and rewrites any file that carries a non-standard ID3v2 tag in front of its FLAC stream. Sources are never modified — output goes to a separate target tree.
-
-Built for the `/mnt/data/Music` library (19,040 FLACs, ~609 GiB), where 206 files sit above 48 kHz, 59 carry a stray ID3v2 tag, and the rest is 44.1 kHz.
-
-## Rules
-
-A file is converted when it is above 16 bit, above 48 kHz, **or** carries a non-standard ID3v2 tag.
-
-| Input | Output | Note |
-| --- | --- | --- |
-| 96 / 192 / 384 kHz, any depth above 16 bit | 48 kHz, 16 bit | dithered |
-| 88.2 / 176.4 / 352.8 kHz, above 16 bit | 44.1 kHz, 16 bit | dithered |
-| 24 bit at 44.1 / 48 kHz | same rate, 16 bit | dithered |
-| 16 bit at 88.2 / 96 kHz and above | family rate, 16 bit | no depth change, so no dither |
-| any FLAC with a leading ID3v2 tag | same rate and depth | rewritten to drop the tag and any ID3v1 trailer, tags and art carried over |
-| 16 bit at 44.1 / 48 kHz, no ID3v2 tag | untouched | not in the job list |
-
-Rate is only ever lowered, by 2:1 where the family allows it. Bit depth is only ever lowered, to 16.
-
-## Usage
+Caps a FLAC library at 16-bit / 48 kHz, keeping each file's rate family, and rewrites files with a non-standard ID3v2 tag in front of the FLAC stream. Sources are never modified; output goes to a separate tree. Built for `/mnt/data/Music`.
 
 ```sh
-./src/music/flac-conversion.py scan    # Report the mix and write the job list to /tmp/opencode/flac-conversion-jobs.tsv
+./src/music/flac-conversion.py scan                 # report mix, write job list
+./src/music/flac-conversion.py convert              # transcode into the target tree
+./src/music/flac-conversion.py verify               # decode and compare outputs against sources
+./src/music/flac-conversion.py move                 # replace sources with verified outputs
+```
 
-./src/music/flac-conversion.py convert --dry-run    # print commands only
-./src/music/flac-conversion.py convert   # Review the list, then convert into the target tree (4 parallel ffmpeg jobs)
+Add `--dry-run` to `convert` and `move` to print only. Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 8`.
 
-./src/music/flac-conversion.py verify    # Check every output against its source before touching the originals
-``` 
+`verify` decodes each output end to end and compares rate, bit depth, channels, sample count, art blocks and the exact tag set against its source; `move` refuses anything that fails.
 
-Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 8`.
+A file is converted when it is above 16 bit, above 48 kHz, or has an ID3v2 tag. Rate drops 2:1 to the family cap (88.2→44.1, 96→48 kHz); depth drops to 16 (dithered). `convert` skips outputs already in the right format, so re-running it is safe.
 
-`convert` and `verify` each close with the job list's size report, summed from the files on disk — `91.31 GiB in -> 45.62 GiB out (-50.0%)` over the whole library, and near `-0.0%` for the tag-only rewrites. An output that does not exist yet, because the run is partial or the file failed, counts as zero bytes.
+Tags are copied from the source's own Vorbis comments with `metaflac`, keys and duplicates intact; `ffprobe` fills in only what a stray ID3v2 tag holds. Cover art passes through (`-map 0`).
 
-`scan` reads only the file header (STREAMINFO, skipping a non-standard ID3v2 tag placed in front of the FLAC stream — those files are read and listed per folder with the tag's size, since they are all rewritten) and reports anything unreadable or not actually FLAC, grouped by folder with the container it did find — MP3, Ogg, MP4/ALAC, WAV, truncated header, empty file — instead of a generic parse error. `convert` skips outputs that already exist with the right rate and bit depth, writes to `<name>.flac.part`, copies the tags across, drops the trailing ID3v1 tag that ID3v2-tagged files also carry (ffmpeg muxes it as audio, and the decoder rejects anything after the last frame), confirms the new file decodes with `flac -t` (ffmpeg exits 0 even when it logs FLAC decode errors, so its status is not trusted), and renames on success — it keeps going when one file fails, and the exit code is non-zero if any did.
+Requires `ffmpeg` (with `libsoxr`), `ffprobe`, `metaflac`, `flac`.
 
-`verify` decodes every output end to end with `flac -t` (so a truncated or corrupt file is caught before its tags are even looked at), then compares rate, bit depth, channel count, sample count (scaled by the rate change) and `PICTURE` block count against the source, and requires the tag set to match exactly — missing and extra tags both fail. It exits non-zero on any mismatch. When an output's rate or bit depth changed, it also measures the peak level and warns without failing about samples at full scale, which is where a resample that overshot would have clipped. When neither changed — the ID3v2-tag-only rewrites — it decodes both sides to raw PCM and requires the MD5 to match, since stripping the wrapper must leave the audio untouched. Run it before deleting or replacing originals; that step is deliberately not automated.
-
-Tags survive by not trusting the encoder with them. ffmpeg is given no `-map_metadata`, and after each rewrite the source's tags are read from its own Vorbis comment block with `metaflac` — same keys, same case, duplicate values kept — and written onto the output, replacing whatever the encoder left behind. `ffprobe` is consulted only for tags the Vorbis block does not have, which is how metadata living in a stray ID3v2 tag survives; its names are translated back first (`track`→`TRACKNUMBER`, `disc`→`DISCNUMBER`, `album_artist`→`ALBUMARTIST`, and `07/12` split into `TRACKNUMBER=07` plus `TRACKTOTAL=12`). Reading tags through `ffprobe` alone was the earlier bug: it renames those keys, and players looking for the Vorbis spellings then show no track numbers. `verify` compares the source's real Vorbis keys for the same reason. If a source has no tags, the output has none — the encoder's own `encoder=Lavf…` tag is removed too.
-
-## Dependencies
-
-`ffmpeg` (with `libsoxr`; `verify` also uses it for the peak measurement), `ffprobe`, `metaflac`, `flac` (the end-to-end decode test in `convert` and `verify`). All are installed.
-
-## Caveats
-
-- Transcoding is one-way. Keep the originals until `verify` is clean.
-- 88.2 → 48 kHz, if ever forced by a device, is a non-integer resample. The default family-preserving mapping avoids it.
-- 24 → 16 bit is dithered (`triangular_hp`) because undithered truncation turns quantization error into distortion rather than noise.
-- A file rewritten only to drop its ID3v2 and ID3v1 tags keeps its audio frames as they are, but the file bytes differ: the container header is rewritten and ffmpeg's own metadata is replaced by the tags read back from the source.
-- Tag keys are copied exactly as the source stores them, values exactly. A player that wants a spelling the source did not use will still not find it.
-- Sample counts are compared by scaling the source count by the rate change (the family mappings are exact integer ratios). A source whose STREAMINFO stores no total (`0`, meaning unknown) is not length-checked.
-- Cover art comes from ffmpeg (`-map 0`), which keeps the `PICTURE` blocks as they are. If a source has no embedded art, nothing is added.
+Caveats: transcoding is one-way, so run `verify` before `move`; a tag-only rewrite keeps its audio but the file bytes change; a source with no total sample count is not length-checked.
