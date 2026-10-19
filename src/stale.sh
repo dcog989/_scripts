@@ -1,7 +1,7 @@
 #!/bin/sh
-# stale.sh [root] [days] - list directories whose newest descendant is older than N days (default 80)
+# stale.sh [root] [days] - list directories whose newest descendant is older than N days
 root=${1:-$HOME}
-days=${2:-80}
+days=${2:-90}
 max_depth=4
 [ "$root" = / ] || root=${root%/}
 cutoff=$(( $(date +%s) - days * 86400 ))
