@@ -12,6 +12,7 @@ Modes:
     scan     report the library's rate/bit-depth mix, write the job list
     convert  transcode the job list into the target tree
     verify   check every output against its source
+    move     replace the sources with their outputs, once those verify
 """
 
 from __future__ import annotations
@@ -57,6 +58,7 @@ MODE_TOOLS = {
     "scan": (),
     "convert": ("flac", "ffmpeg", "ffprobe", "metaflac"),
     "verify": ("flac", "ffmpeg", "ffprobe", "metaflac"),
+    "move": ("flac", "ffmpeg", "ffprobe", "metaflac"),
 }
 FFPROBE_TAG_ENTRY = "format_tags"
 FFPROBE_TAG_PREFIX = "TAG:"
@@ -503,6 +505,15 @@ def summarise(counts: collections.Counter[str], total: int) -> str:
     )
 
 
+def summarise_move(counts: collections.Counter[str], total: int) -> str:
+    return (
+        f"{counts['moved']} moved, {counts['planned']} planned, "
+        f"{counts['not converted']} not converted, "
+        f"{counts['unverified']} unverified, {counts['missing source']} missing source "
+        f"of {total}"
+    )
+
+
 def peak_level(path: Path) -> float | None:
     """Highest sample level in dB from a decode pass; None when unreadable."""
     # fmt: off
@@ -641,6 +652,50 @@ def verify(
     return problems, warnings
 
 
+def move_one(entry: Entry, target_root: Path, dry_run: bool) -> tuple[str, list[str]]:
+    """Replace a source with its output, keeping the source only while it fails to verify."""
+    target = target_root / entry.relative
+    if not target.exists():
+        return "not converted", []
+    if not entry.source.exists():
+        return "missing source", []
+    problems, warnings = check_output(entry, target_root)
+    if problems:
+        return "unverified", problems
+    if dry_run:
+        return "planned", warnings
+    # same filesystem, so this is the original's replacement, not the output's removal
+    os.replace(target, entry.source)
+    return "moved", warnings
+
+
+def move(
+    entries: list[Entry], target_root: Path, jobs: int, dry_run: bool
+) -> tuple[collections.Counter[str], list[str]]:
+    counts: collections.Counter[str] = collections.Counter()
+    notes: list[str] = []
+    total = len(entries)
+
+    def run(pair: tuple[int, Entry]) -> tuple[Entry, str, list[str]]:
+        _, entry = pair
+        status, messages = move_one(entry, target_root, dry_run)
+        return entry, status, messages
+
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        results = pool.map(run, enumerate(entries, start=1))
+        for index, (entry, status, messages) in enumerate(results, start=1):
+            counts[status] += 1
+            notes.extend(messages)
+            if status in ("moved", "planned"):
+                print(f"[{index}/{total}] {entry.relative}")
+            elif status != "not converted":
+                print(
+                    f"[{index}/{total}] {status.upper()} {entry.relative}",
+                    file=sys.stderr,
+                )
+    return counts, notes
+
+
 def plural(count: int, noun: str) -> str:
     return f"{count} {noun}" if count == 1 else f"{count} {noun}s"
 
@@ -757,6 +812,12 @@ def build_parser() -> argparse.ArgumentParser:
     modes.add_parser(
         "verify", parents=[common], help="check every output against its source"
     )
+    move_parser = modes.add_parser(
+        "move",
+        parents=[common],
+        help="replace a source with its output once the output verifies",
+    )
+    move_parser.add_argument("--dry-run", action="store_true")
     return parser
 
 
@@ -814,6 +875,18 @@ def main(argv: list[str] | None = None) -> int:
         if not args.dry_run:
             report_size(entries, target)
         return 1 if failures else 0
+
+    if args.mode == "move":
+        print(
+            f"moving {plural(len(entries), 'output')} over {args.source} "
+            f"({args.jobs} workers)",
+            file=sys.stderr,
+        )
+        counts, notes = move(entries, target, args.jobs, args.dry_run)
+        for note in notes:
+            print(note, file=sys.stderr)
+        print(f"\n{summarise_move(counts, len(entries))}")
+        return 1 if counts["unverified"] or counts["missing source"] else 0
 
     problems, warnings = verify(entries, target, args.jobs)
     for warning in warnings:

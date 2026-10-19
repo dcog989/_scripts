@@ -22,12 +22,12 @@ Rate is only ever lowered, by 2:1 where the family allows it. Bit depth is only 
 ## Usage
 
 ```sh
-./src/flac-conversion/flac-conversion.py scan    # Report the mix and write the job list to /tmp/opencode/flac-conversion-jobs.tsv
+./src/music/flac-conversion.py scan    # Report the mix and write the job list to /tmp/opencode/flac-conversion-jobs.tsv
 
-./src/flac-conversion/flac-conversion.py convert --dry-run    # print commands only
-./src/flac-conversion/flac-conversion.py convert   # Review the list, then convert into the target tree (4 parallel ffmpeg jobs)
+./src/music/flac-conversion.py convert --dry-run    # print commands only
+./src/music/flac-conversion.py convert   # Review the list, then convert into the target tree (4 parallel ffmpeg jobs)
 
-./src/flac-conversion/flac-conversion.py verify    # Check every output against its source before touching the originals
+./src/music/flac-conversion.py verify    # Check every output against its source before touching the originals
 ``` 
 
 Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 8`.
