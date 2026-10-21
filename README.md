@@ -41,10 +41,13 @@ Cleans:
 
 - **Orphans** — packages installed as dependencies that are no longer required (`pacman -Qdtq`).
 - **Package cache** — prunes `/var/cache/pacman/pkg` with `paccache -k 3`, then clears it further via the AUR helper's `-Sc`. The report previews what those steps actually reclaim (cached versions beyond keep-3 plus every version of an uninstalled package).
+- **Stale download dirs** — removes the `download-XXXXXX` temp dirs libalpm leaks into the package cache after an interrupted download. `pacman -Sc` fails with `Error reading fd 8` while they are there. Skipped while pacman is running.
 - **AUR build cache** — reports and cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present.
 - **Unneeded AUR deps** — removes orphaned AUR dependencies via `yay -Yc` / `paru -c`.
 
-Requires `pacman`, `paccache`, and optionally `yay` or `paru`. Destructive operations run only after confirmation; pacman/paccache steps require `sudo`. If no AUR helper is found, AUR-specific steps are skipped with a notice.
+The closing summary counts what each step removed (packages, cache files, stale dirs) and how much space the pacman and AUR caches gave back.
+
+Requires `pacman`, `paccache`, and optionally `yay` or `paru`. Destructive operations run only after confirmation; pacman/paccache steps require `sudo`. If no AUR helper is found, AUR-specific steps are skipped with a notice. The AUR cache step runs `yay -Sc` without `--noconfirm`, so yay and pacman ask before wiping the AUR build cache, before dropping cached packages and before removing unused sync repositories — answer them to control what goes.
 
 ```sh
 repository-clean
