@@ -81,7 +81,7 @@ setup_session_env() {
     [ -n "$session_type" ] || session_type="$fallback"
 
     case "$session_type" in
-        wayland) export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}" ;;
+        wayland) export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-$(wayland_display_name || true)}" ;;
         x11)     export DISPLAY="${DISPLAY:-:0}" ;;
     esac
     export XDG_SESSION_TYPE="$session_type"
@@ -132,6 +132,28 @@ session_env_source() {
         pid=$(pgrep -u "$SESSION_USER" -x "$cmd" 2>/dev/null | head -1) || true
         if [ -n "$pid" ] && grep -qz '^XDG_CURRENT_DESKTOP=' "/proc/$pid/environ" 2>/dev/null; then
             printf '%s\n' "$pid"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# wayland_display_name - the compositor socket the desktop session is using, or
+# nothing. logind does not expose it and KWin takes the first free name (kwin
+# 6.8 starts at wayland-1), so it must be read from the session, not assumed.
+wayland_display_name() {
+    local src entry sock
+    src=$(session_env_source || true)
+    if [ -n "$src" ]; then
+        while IFS= read -r -d '' entry; do
+            case "$entry" in
+                WAYLAND_DISPLAY=?*) printf '%s\n' "${entry#*=}"; return 0 ;;
+            esac
+        done < "/proc/$src/environ" 2>/dev/null
+    fi
+    for sock in "$XDG_RUNTIME_DIR"/wayland-*; do
+        if [ -S "$sock" ]; then
+            printf '%s\n' "${sock##*/}"
             return 0
         fi
     done
@@ -199,7 +221,7 @@ activate() {
     local dir file prior app
     dir=$(state_dir)
     file="$dir/state"
-    mkdir -p "$dir"
+    install -d -m 0700 "$dir"
     chown_to_user "$dir"
 
     if [ -f "$file" ]; then
