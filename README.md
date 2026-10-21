@@ -73,11 +73,13 @@ git-maintenance -a              # aggressive: --aggressive --prune=now (much slo
 
 ## big-files
 
-Reports source files exceeding 400 lines, grouped by enclosing ,git project and sorted by line count (largest first). Files outside any .git project are grouped by their top-level directory.
+Reports source files exceeding 400 lines (or a custom limit), grouped by enclosing `.git` project and sorted by line count (largest first). Files outside any `.git` project are grouped by their top-level directory.
 
 ```sh
-big-files                # scan the current directory
+big-files                # scan the current directory, limit 400 lines
 big-files /some/dir      # scan a specific directory
+big-files 800            # custom line limit
+big-files /some/dir 800  # both
 ```
 
 ---

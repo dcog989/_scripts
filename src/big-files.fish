@@ -5,22 +5,27 @@
 # results are reported under that project.
 #
 # Usage:
-#   big-files [base]
+#   big-files [base] [lines]
 #
-# `base` defaults to the current directory.
+# `base` defaults to the current directory and `lines` to 400. A numeric
+# argument is taken as the line limit; any other argument as the base.
 function big-files --description 'Recurse project directory for over-sized files'
     set -l base .
-    if test (count $argv) -gt 0
-        set base $argv[1]
+    # Files above this many lines are reported; it also anchors the colour ramp.
+    set -l limit 400
+    for arg in $argv
+        if string match -qr '^[0-9]+$' -- $arg
+            set limit $arg
+        else
+            set base $arg
+        end
     end
     # Normalized so the awk group can strip it as a literal prefix (fd echoes
     # --search-path verbatim).
     set base (path normalize -- $base)
 
     set -l tab (printf '\t')
-
-    # Files above this many lines are reported; it also anchors the colour ramp.
-    set -l limit 400
+    set -l span (math "$limit * 1.5")
 
     set -l project
     if test -e "$base/.git"
@@ -62,9 +67,9 @@ function big-files --description 'Recurse project directory for over-sized files
                 }
             }
             print best "\t" count "\t" path
-        }' | sort -t "$tab" -k1,1 -k2,2nr | awk -F "$tab" -v limit="$limit" '
+        }' | sort -t "$tab" -k1,1 -k2,2nr | awk -F "$tab" -v limit="$limit" -v span="$span" '
     function paint(c,   t, g) {
-        t = (c - limit) / 600
+        t = (c - limit) / span
         if (t < 0) t = 0
         if (t > 1) t = 1
         g = int(255 * (1 - t))
