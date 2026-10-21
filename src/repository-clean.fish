@@ -85,15 +85,23 @@ function repository-clean --description 'List then clean pacman/AUR package left
         echo "  "$ok$res$off
     end
 
-    if test -n "$aur"
-        echo $sec"== Removing stale pacman download dirs =="$off
-        # Never while pacman runs: download-* dirs are the live download target.
-        if pgrep -x pacman >/dev/null
-            echo "  "$bad"skipped: pacman is running"$off
+    # libalpm downloads into <cache>/download-XXXXXX and leaks that dir when a
+    # download is interrupted; `pacman -Sc` then fails reading it as a package.
+    echo $sec"== Removing stale pacman download dirs =="$off
+    # Never while pacman runs: download-* dirs are the live download target.
+    if pgrep -x pacman >/dev/null
+        echo "  "$bad"skipped: pacman is running"$off
+    else
+        set -l dl (sudo find /var/cache/pacman/pkg -maxdepth 1 -type d -name 'download-*' 2>/dev/null)
+        if test (count $dl) -gt 0
+            sudo rm -rf $dl
+            echo "  "$ok"removed "(count $dl)" stale download dir(s)"$off
         else
-            sudo find /var/cache/pacman/pkg -maxdepth 1 -type d -name 'download-*' -mmin +1440 -exec rm -rf {} + 2>/dev/null
+            echo "  "$dim"none"$off
         end
+    end
 
+    if test -n "$aur"
         echo $sec"== Cleaning AUR build cache ($aur -Sc) =="$off
         set -l bp (du -sm /var/cache/pacman/pkg 2>/dev/null | cut -f1)
         set -l ba (du -sm ~/.cache/$aur 2>/dev/null | cut -f1)
