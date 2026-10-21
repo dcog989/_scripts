@@ -1,6 +1,6 @@
 # scripts
 
-A collection of scripts for maintaining Arch/CachyOS, git repositories, etc.
+A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositories, etc.
 
 ## Contents
 
@@ -133,17 +133,37 @@ Maintenance for OpenCode v2 database:
 - Runs `VACUUM`.
 - Prints a `summary` line with rows pruned, DB file size delta / reusable pages, snapshot and log bytes freed.
 
-From a terminal it asks four questions up front — backup, dead-path grace, session age, VACUUM — and Enter takes the default. With no tty (cron, systemd `--user`) it runs unattended: VACUUM on, backup off, no age prune. Any setting can be pinned with its env var, which also skips that prompt.
+From a terminal it prompts for backup, dead-path grace, session age, VACUUM options. With no tty (cron, systemd `--user`) it runs unattended: VACUUM on, backup off, no age prune. Any setting can be pinned with its env var, which also skips that prompt.
 
-A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes (including the backup and `VACUUM`, which needs an exclusive lock) are skipped while OpenCode is running — snapshot and log cleanup still run. Output is appended to `~/.local/state/opencode/maintenance/maintenance.log` and echoed to the terminal. Intended to run from a systemd user timer or cron.
+A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes (including the backup and `VACUUM`, which needs an exclusive lock) are skipped while OpenCode is running — snapshot and log cleanup still run. Output is appended to `~/.local/state/opencode/maintenance/maintenance.log` and echoed to the terminal.
 
 ```sh
 opencode-maintenance                 # interactive: 4 questions, Enter = defaults
 DRY_RUN=1 opencode-maintenance       # report the full plan, change nothing, no prompts
-BACKUP=1 SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 VACUUM=1 opencode-maintenance   # unattended, with backup
+BACKUP=1 SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 DO_VACUUM=1 opencode-maintenance   # unattended, with backup
 ```
 
-Settings: `BACKUP`, `BACKUP_DIR`, `BACKUP_KEEP`, `DEAD_GRACE_DAYS`, `SESSION_MAX_AGE_DAYS`, `ASSUME_YES`, `DO_VACUUM`, `LOG_MAX_MB`, `LOG_KEEP`, `ROOTS`, `SNAP_DIR`.
+### Settings
+
+All are environment variables; none are command-line flags. Setting one skips the matching prompt.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `BACKUP` | prompt (`Y`); `0` when unattended, `1` under `DRY_RUN` | Gzipped DB backup before any write. A failed backup aborts the run. |
+| `BACKUP_DIR` | `~/Downloads` | Where `opencode-db-<date>.db.gz` goes. |
+| `BACKUP_KEEP` | `3` | Newest backups kept; older ones are deleted after each successful backup. |
+| `DEAD_GRACE_DAYS` | prompt (`7`) | Days a missing project path must stay missing before its rows are pruned. Also the minimum age of an orphan snapshot dir. |
+| `SESSION_MAX_AGE_DAYS` | prompt (`60`); `0` when unattended, `60` under `DRY_RUN` | Prune sessions with no activity for this many days. `0` disables. Without a tty it also needs `ASSUME_YES=1`, otherwise the prune is skipped. |
+| `ASSUME_YES` | `0` | `1` deletes ripe sessions without the `[y/N]` confirmation. |
+| `DO_VACUUM` | prompt (`Y`) / `1` | Run `VACUUM` at the end. Needs OpenCode closed; compacts pages freed by earlier runs too. |
+| `LOG_MAX_MB` | `50` | Rotate `opencode.log` and `maintenance.log` once above this size. `0` disables rotation. |
+| `LOG_KEEP` | `3` | Number of `.gz` archives kept per log. |
+| `ROOTS` | `$HOME/Projects` | Space-separated allowlist of path prefixes; sessions outside it are never pruned. Quote multiple: `ROOTS="$HOME/Projects /mnt/data/src"`. |
+| `SNAP_DIR` | `$OC_DIR/snapshot` | Revert-snapshot store; project dirs without a DB row are deleted once older than `DEAD_GRACE_DAYS`. |
+| `OC_DIR` | `~/.local/share/opencode` | Base data directory; `OC_DB` and `OC_LOG` default inside it. |
+| `OC_DB`, `OC_LOG` | `$OC_DIR/opencode.db`, `$OC_DIR/log/opencode.log` | Override the DB or log path. |
+| `OC_STATE` | `~/.local/state/opencode` | Parent of `maintenance/` (lock, dead-path state, transcript). |
+| `DRY_RUN` | `0` | `1` logs every action as `DRY RUN - would ...`, skips all prompts, and makes no DB, snapshot or log-rotation changes; the run transcript is still appended. |
 
 ---
 
