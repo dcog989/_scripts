@@ -133,12 +133,11 @@ function repository-clean --description 'List then clean pacman/AUR package left
     end
 
     if test -n "$aur"
-        echo $sec"== Cleaning AUR build cache ($aur -Sc) =="$off
-        # No --noconfirm and no output capture: yay asks before wiping the AUR
-        # build cache and pacman asks before dropping cached packages, so the
-        # questions have to reach the terminal and the answers have to be read.
+        echo $sec"== Cleaning AUR build cache (~/.cache/$aur) =="$off
+        # Delete directly, not via `$aur -Sc`: that also runs `pacman -Sc`,
+        # which keeps only the latest cached version and undoes the keep-3 prune.
         set -l aur_files_before (count (find ~/.cache/$aur -type f 2>/dev/null))
-        $aur -Sc
+        rm -rf ~/.cache/$aur/* 2>/dev/null
         set -l aur_files_after (count (find ~/.cache/$aur -type f 2>/dev/null))
         set n_aur_files (math $aur_files_before - $aur_files_after)
 
