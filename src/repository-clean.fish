@@ -25,6 +25,9 @@ function repository-clean --description 'List then clean pacman/AUR package left
         command -q paru; and set aur paru
     end
 
+    set -l paccache
+    command -q paccache; and set paccache paccache
+
     echo
     echo $sec"================ Package maintenance ================"$off
 
@@ -45,8 +48,12 @@ function repository-clean --description 'List then clean pacman/AUR package left
     echo
     echo $sec"Package cache"$off" (/var/cache/pacman/pkg)"
     echo "  "$dim"total size:    "$off(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
-    echo "  "$dim"old versions:  "$off(paccache -d -k $keep 2>/dev/null | tail -1)
-    echo "  "$dim"uninstalled:   "$off(paccache -d -u -k 0 2>/dev/null | tail -1)
+    if test -n "$paccache"
+        echo "  "$dim"old versions:  "$off(paccache -d -k $keep 2>/dev/null | tail -1)
+        echo "  "$dim"uninstalled:   "$off(paccache -d -u -k 0 2>/dev/null | tail -1)
+    else
+        echo "  "$bad"paccache not installed - cache prune skipped"$off
+    end
 
     if test -n "$aur"
         echo
@@ -88,30 +95,34 @@ function repository-clean --description 'List then clean pacman/AUR package left
         echo "  "$dim"none"$off
     end
 
-    echo $sec"== Pruning cache (keep $keep) =="$off
-    set -l res (sudo paccache -r -k $keep 2>&1)
-    set -l m (string match -r --groups-only 'finished: (\d+) packages removed' -- $res '' | head -1)
-    if test -n "$m"
-        set n_pruned $m
-        echo "  "$ok"pruned $n_pruned package version(s)"$off
-    else
-        echo "  "$dim"nothing to clean"$off
-    end
-    if string match -qi '*error*' -- $res ''
-        printf '%s\n' $res | string match -i '*error*'
-    end
+    if test -n "$paccache"
+        echo $sec"== Pruning cache (keep $keep) =="$off
+        set -l res (sudo paccache -r -k $keep 2>&1)
+        set -l m (string match -r --groups-only 'finished: (\d+) packages removed' -- $res '' | head -1)
+        if test -n "$m"
+            set n_pruned $m
+            echo "  "$ok"pruned $n_pruned package version(s)"$off
+        else
+            echo "  "$dim"nothing to clean"$off
+        end
+        if string match -qi '*error*' -- $res ''
+            printf '%s\n' $res | string match -i '*error*'
+        end
 
-    echo $sec"== Removing uninstalled from cache =="$off
-    set -l res (sudo paccache -r -u -k 0 2>&1)
-    set -l m (string match -r --groups-only 'finished: (\d+) packages removed' -- $res '' | head -1)
-    if test -n "$m"
-        set n_uninstalled $m
-        echo "  "$ok"removed $n_uninstalled package(s) of uninstalled software"$off
+        echo $sec"== Removing uninstalled from cache =="$off
+        set -l res (sudo paccache -r -u -k 0 2>&1)
+        set -l m (string match -r --groups-only 'finished: (\d+) packages removed' -- $res '' | head -1)
+        if test -n "$m"
+            set n_uninstalled $m
+            echo "  "$ok"removed $n_uninstalled package(s) of uninstalled software"$off
+        else
+            echo "  "$dim"nothing to clean"$off
+        end
+        if string match -qi '*error*' -- $res ''
+            printf '%s\n' $res | string match -i '*error*'
+        end
     else
-        echo "  "$dim"nothing to clean"$off
-    end
-    if string match -qi '*error*' -- $res ''
-        printf '%s\n' $res | string match -i '*error*'
+        echo $dim"Skipping cache prune: paccache not installed"$off
     end
 
     # libalpm downloads into <cache>/download-XXXXXX and leaks that dir when a
