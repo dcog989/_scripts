@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # install-apps.sh - Install apps via pacman (CachyOS v3 / Arch repos)
-# and AUR packages via yay.
+# and AUR packages via yay or paru.
 #
 # Usage:  install-apps.sh
 #
@@ -28,15 +28,23 @@ AUR_APPS=(
 )
 
 # Both halves are the job: refuse to start rather than install half of it.
-if ! command -v yay >/dev/null 2>&1; then
-    echo "yay not found - install it first: sudo pacman -S yay" >&2
+AUR_HELPER=""
+for helper in yay paru; do
+    if command -v "$helper" >/dev/null 2>&1; then
+        AUR_HELPER="$helper"
+        break
+    fi
+done
+
+if [[ -z "$AUR_HELPER" ]]; then
+    echo "No AUR helper found (yay or paru) - install one first" >&2
     exit 1
 fi
 
 echo "Installing Repo apps (CachyOS v3 / Arch)..."
 sudo pacman -S --needed --noconfirm "${REPO_APPS[@]}"
 
-echo "Installing AUR apps via yay..."
-yay -S --needed --noconfirm "${AUR_APPS[@]}"
+echo "Installing AUR apps via $AUR_HELPER..."
+"$AUR_HELPER" -S --needed --noconfirm "${AUR_APPS[@]}"
 
 echo "Installation complete."

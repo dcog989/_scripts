@@ -84,7 +84,7 @@ big-files /some/dir      # scan a specific directory
 
 ## install-apps
 
-Installs a fixed set of packages: repo apps via `pacman` and AUR apps via `yay`. Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
+Installs a fixed set of packages: repo apps via `pacman` and AUR apps via `yay` (or `paru` when yay is absent). Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
 
 ```sh
 ./src/install-apps.sh
