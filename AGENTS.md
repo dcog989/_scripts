@@ -114,4 +114,4 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 - Fixes and instructions: numbered steps, one action each, exact command/path/code. No prose paragraphs or recap.
 - Questions and explanations: direct prose, only the reasoning needed. No tables unless asked.
 - No preamble, restating, hedging, disclaimers, meta-commentary, emotional framing, or closing offers; end when done unless a real decision is needed.
-- Ask when requirements are ambiguous; put risks and edge cases in one final line.
+- Ask when requirements are ambiguous; put risks and edge cases, if any, in one final line.
