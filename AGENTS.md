@@ -14,6 +14,7 @@ All scripts live in `src/`:
 - `src/git-maintenance.fish` — safely optimize every git repo under a directory tree; report (and, with `-u`, untrack) tracked+ignored files.
 - `src/big-files.fish` — report source files over 400 lines, grouped by project.
 - `src/opencode-update.fish` — update the opencode CLI and desktop AppImage.
+- `src/last-installed.fish` — colorized tail of pacman.log with version-diff highlighting.
 - `src/install-apps.sh` — install a fixed set of repo and AUR packages.
 - `src/monitor-refresh.sh` — switch the DP-1 monitor refresh rate (LACT profile hook).
 - `src/lact-gaming.sh` — LACT Gaming hook: switch refresh rate and park/restore tray apps.

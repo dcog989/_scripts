@@ -1,6 +1,6 @@
 # scripts
 
-A collection of maintenance scripts for CachyOS, git repositories.
+A collection of scripts for maintaining Arch/CachyOS, git repositories, etc.
 
 ## Contents
 
@@ -8,37 +8,34 @@ A collection of maintenance scripts for CachyOS, git repositories.
 | --- | --- | --- |
 | `src/big-files.fish`            | fish function | Report source files over 400 lines, grouped by project. |
 | `src/git-maintenance.fish`      | fish function | Safely optimize every git repo under a directory tree and untrack tracked+ignored files. |
-| `src/health-check.sh`           | shell script | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
-| `src/install-apps.sh`           | shell script | Install a fixed set of repo and AUR packages. |
-| `src/lact-gaming.sh`            | shell script | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
+| `src/health-check.sh`           | shell script  | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
+| `src/install-apps.sh`           | shell script  | Install a fixed set of repo and AUR packages. |
+| `src/lact-gaming.sh`            | shell script  | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
+| `src/last-installed.fish`       | fish function | Recent pacman transactions, colourized, with changed version parts highlighted. |
 | `src/music/flac-conversion.py`  | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
-| `src/opencode-maintenance.sh`   | shell script | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
+| `src/opencode-maintenance.sh`   | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | `src/opencode-update.fish`      | fish function | Update the opencode CLI and desktop AppImage. |
 | `src/repository-clean.fish`     | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
-| `src/stale.sh`                  | shell script | List content not touched for 80 days. |
+| `src/stale.sh`                  | shell script  | List content not touched for 80 days. |
 
-## Install
-
-Fish functions - run directly, or symlink to fish functions directory:
+## Install Fish Functions
 
 ```sh
-source /path/to/src/repository-clean.fish
-# or
-ln -sf /path/to/src/*.fish ~/.config/fish/functions/
+ln -sf /path/to/src.fish ~/.config/fish/functions/   # symlink to fish functions directory
 ```
 
-Shell scripts - mark executable and symlink to `PATH`:
+## Install Shell Scripts
 
 ```sh
-chmod +x /home/bubba/Projects/_scripts/src/[NAME].sh
-ln -sf /home/bubba/Projects/_scripts/src/[NAME] ~/.local/bin/
+chmod +x /path/to/src.sh           # mark executable
+ln -sf /path/to/src ~/.local/bin/  # symlink to `PATH`. Note: extension not needed here.
 ```
 
 ---
 
 ## repository-clean
 
-Lists and cleans pacman/AUR package leftovers on Arch-based systems. Prints a report, asks for confirmation, then runs the cleanup steps.
+Lists and cleans pacman/AUR package leftovers on Arch-based systems. Prints a report, asks for confirmation, then runs the cleanup.
 
 Cleans:
 
@@ -76,7 +73,7 @@ git-maintenance -a              # aggressive: --aggressive --prune=now (much slo
 
 ## big-files
 
-Reports source files exceeding 400 lines, grouped by enclosing project and sorted by line count (largest first). A directory counts as a project root when it contains a `.git` marker; files outside any project are grouped by their top-level directory.
+Reports source files exceeding 400 lines, grouped by enclosing ,git project and sorted by line count (largest first). Files outside any .git project are grouped by their top-level directory.
 
 ```sh
 big-files                # scan the current directory
@@ -87,7 +84,7 @@ big-files /some/dir      # scan a specific directory
 
 ## install-apps
 
-Installs a fixed set of packages: repo apps via `pacman` (CachyOS v3 / Arch) and AUR apps via `yay`. Refuses to start when `yay` is missing. Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
+Installs a fixed set of packages: repo apps via `pacman` and AUR apps via `yay`. Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
 
 ```sh
 ./src/install-apps.sh
@@ -99,19 +96,17 @@ Installs a fixed set of packages: repo apps via `pacman` (CachyOS v3 / Arch) and
 
 LACT "Gaming" profile hook combining the refresh switch with parking lightweight background tray apps.
 
-- `on` — record the refresh mode that was active beforehand, stop any running `cliptoo` and KopiaUI (`/opt/KopiaUI/kopia-ui`) instances (recording which ones were running), then switch `DP-1` to 240Hz. Stopping apps before the mode switch matters: a modeset under a live Chromium tears down its GPU process.
+- `on` — record the refresh mode that was active beforehand, stop any running `cliptoo` and KopiaUI (`/opt/KopiaUI/kopia-ui`) instances (recording which ones were running), then switch `DP-1` to 240Hz.
 - `off` — restore the recorded refresh mode (falling back to 120Hz if none was captured), then restart only the apps that were running at activation. State lives in `~/.local/state/lact-gaming/state`.
 
-Activation is idempotent: if the state file already exists (a previous `off` never fired), the recorded mode and apps are kept rather than overwritten, so a later `off` still restores them. The desktop refresh is managed directly with `kscreen-doctor`. Restored apps are relaunched with the full desktop session environment (read from a running Plasma process), so toolkits load the correct KDE theme.
-
-Designed to run as root from `lactd`; like `monitor-refresh.sh` it enters the session user's Wayland/X11 environment. Stop is graceful (`SIGTERM`, then `SIGKILL` after ~5s).
+Activation is idempotent: if the state file already exists (a previous `off` never fired), the recorded mode and apps are kept rather than overwritten, so a later `off` still restores them.
 
 ```sh
 ./src/lact-gaming.sh on     # gaming profile activated
 ./src/lact-gaming.sh off    # gaming profile deactivated
 ```
 
-Point the LACT Gaming profile hooks at this script instead of `monitor-refresh.sh`:
+Point the LACT Gaming profile hooks at this script:
 
 ```yaml
 hooks:
@@ -125,10 +120,10 @@ Requires `kscreen-doctor`, `loginctl`, and `runuser` (util-Linux).
 
 ## opencode-maintenance
 
-Periodic maintenance for OpenCode:
+Maintenance for OpenCode v2 database:
 
+- Backs up the DB first: `sqlite3 .backup` piped through `gzip` to `~/Downloads/opencode-db-<date>.db.gz`, keeping the 3 newest.
 - Removes SQLite rows for project directories that no longer exist (which otherwise surface as "Failed to send prompt / Unable to retrieve session").
-- Backs up the DB first: `sqlite3 .backup` piped through `gzip` to `~/Downloads/opencode-db-<date>.db.gz`, keeping the 3 newest. A failed backup aborts the run before anything is written.
 - Drops the frozen legacy `session`/`message`/`part` rows that OpenCode migrated to `session_v2`/`session_message` (only rows also present in `session_v2`, so no history is lost).
 - Optionally prunes sessions with no activity for a number of days.
 - Deletes `snapshot/<project-id>/` git dirs for projects no longer in the DB (revert snapshots; `global` is kept).
@@ -141,10 +136,9 @@ From a terminal it asks four questions up front — backup, dead-path grace, ses
 A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes (including the backup and `VACUUM`, which needs an exclusive lock) are skipped while OpenCode is running — snapshot and log cleanup still run. Output is appended to `~/.local/state/opencode/maintenance/maintenance.log` and echoed to the terminal. Intended to run from a systemd user timer or cron.
 
 ```sh
-./src/opencode-maintenance.sh                 # interactive: 4 questions, Enter = defaults
-DRY_RUN=1 ./src/opencode-maintenance.sh       # report the full plan, change nothing, no prompts
-BACKUP=1 SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 ./src/opencode-maintenance.sh   # unattended, with backup
-DEAD_GRACE_DAYS=0 DO_VACUUM=0 ./src/opencode-maintenance.sh
+opencode-maintenance                 # interactive: 4 questions, Enter = defaults
+DRY_RUN=1 opencode-maintenance       # report the full plan, change nothing, no prompts
+BACKUP=1 SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 VACUUM=1 opencode-maintenance   # unattended, with backup
 ```
 
 Settings: `BACKUP`, `BACKUP_DIR`, `BACKUP_KEEP`, `DEAD_GRACE_DAYS`, `SESSION_MAX_AGE_DAYS`, `ASSUME_YES`, `DO_VACUUM`, `LOG_MAX_MB`, `LOG_KEEP`, `ROOTS`, `SNAP_DIR`.
@@ -163,11 +157,20 @@ Requires `curl` and `jq`.
 
 ---
 
+## last-installed
+
+Colourized tail of `/var/log/pacman.log`. Actions are colour-coded and labelled `major`, `minor`, `patch`, `build`, `pkgrel` or `epoch`. Requires `awk`.
+
+```sh
+last-installed         # last 50 transactions
+last-installed 100     # last 100
+```
+
+---
+
 ## health-check
 
-Read-only report of potential system-wide issues. Signal-only: it prints a section only when a check finds something, filters known-benign log/package noise, and exits non-zero when any issue group is found (handy for a timer/cron).
-
-Checks:
+Read-only report of potential system-wide issues. Signal-only: it prints a section only when a check finds something, filters known-benign log/package noise, and exits non-zero when any issue group is found.
 
 - **Failed units** — failed system and user systemd units.
 - **Packaging** — `pacman -Dk` database errors, `pacman -Qkq` missing package files (expected runtime paths filtered), `pacman -Qtdq` true orphans, and `paccheck --md5sum --files --quiet` when `pacutils` is installed.
