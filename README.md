@@ -6,18 +6,21 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 
 | Script | Type | Purpose |
 | --- | --- | --- |
-| `src/big-files.fish`            | fish function | List files above a size threshold (default 5 MB), largest first. |
-| `src/git-maintenance.fish`      | fish function | Safely optimize every git repo under a directory tree and untrack tracked+ignored files. |
-| `src/health-check.sh`           | shell script  | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
-| `src/install-apps.sh`           | shell script  | Install a fixed set of repo and AUR packages. |
-| `src/lact-gaming.sh`            | shell script  | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
-| `src/last-installed.fish`       | fish function | Recent pacman transactions, colourized, with changed version parts highlighted. |
-| `src/long-files.fish`           | fish function | Report text files over 400 lines, grouped by project. |
-| `src/music/flac-conversion.py`  | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
-| `src/opencode-maintenance.sh`   | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
-| `src/opencode-update.fish`      | fish function | Update the opencode CLI and desktop AppImage. |
-| `src/repository-clean.fish`     | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
-| `src/old-files.fish`            | fish function | List files not touched for 90 days, or directories with `-dirs`. |
+| `src/big-files.fish`             | fish function | List files above a size threshold, largest first. |
+| `src/git-maintenance.fish`       | fish function | Optimize and report issues for every git repo under a directory tree. |
+| `src/health-check.sh`            | shell script  | Read-only report of system-wide issues. |
+| `src/install-apps.sh`            | shell script  | Install a fixed set of repo and AUR packages. |
+| `src/lact-gaming.sh`             | shell script  | LACT Gaming hook: switch monitor refresh rate and park/restore apps. |
+| `src/last-installed.fish`        | fish function | List recently installed pacman/AUR apps. |
+| `src/long-files.fish`            | fish function | List text files by line length, grouped by directory. |
+| `src/music/artists-with-flac.sh` | shell script  | List artists under `/mnt/data/Music` that contain FLAC files. |
+| `src/music/flac-conversion.py`   | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
+| `src/music/music-48k-move.sh`    | shell script  | Replace library files with their converted 48 kHz counterparts (dry run by default). |
+| `src/old-files.fish`             | fish function | List files older than a number of days. Optionaly directories with `-dirs`. |
+| `src/opencode-maintenance.sh`    | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
+| `src/repository-clean.fish`      | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
+
+---
 
 ## Install Fish Functions
 
@@ -41,14 +44,14 @@ Lists and cleans pacman/AUR package leftovers on Arch-based systems. Prints a re
 Cleans:
 
 - **Orphans** — packages installed as dependencies that are no longer required (`pacman -Qdtq`).
-- **Package cache** — prunes `/var/cache/pacman/pkg` with `paccache -k 3`, then clears it further via the AUR helper's `-Sc`. The report previews what those steps actually reclaim (cached versions beyond keep-3 plus every version of an uninstalled package).
+- **Package cache** — prunes `/var/cache/pacman/pkg` with `paccache -k 3`, then drops every cached version of an uninstalled package. The report previews what those steps actually reclaim (cached versions beyond keep-3 plus every version of an uninstalled package).
 - **Stale download dirs** — removes the `download-XXXXXX` temp dirs libalpm leaks into the package cache after an interrupted download. `pacman -Sc` fails with `Error reading fd 8` while they are there. Skipped while pacman is running.
 - **AUR build cache** — reports and cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present.
 - **Unneeded AUR deps** — removes orphaned AUR dependencies via `yay -Yc` / `paru -c`.
 
 The closing summary counts what each step removed (packages, cache files, stale dirs) and how much space the pacman and AUR caches gave back.
 
-Requires `pacman`, `paccache`, and optionally `yay` or `paru`. Destructive operations run only after confirmation; pacman/paccache steps require `sudo`. If no AUR helper is found, AUR-specific steps are skipped with a notice. The AUR cache step runs `yay -Sc` without `--noconfirm`, so yay and pacman ask before wiping the AUR build cache, before dropping cached packages and before removing unused sync repositories — answer them to control what goes.
+Requires `pacman`, `paccache`, `find`, `pgrep` and optionally `yay` or `paru`. Destructive operations run only after one confirmation; pacman/paccache steps require `sudo`. If no AUR helper is found, AUR-specific steps are skipped with a notice. The AUR build cache is emptied directly (`rm -rf ~/.cache/yay/*`), not via `yay -Sc`, because `-Sc` also runs `pacman -Sc` and would collapse the keep-3 policy.
 
 ```sh
 repository-clean
@@ -77,7 +80,7 @@ git-maintenance -a              # aggressive: --aggressive --prune=now (much slo
 
 ## big-files
 
-Lists files larger than a size threshold (in MB), grouped by enclosing `.git` project and sorted by size (largest first), with a green-to-red colour ramp. Hidden and ignored files are included.
+Lists files larger than a size threshold (in MB), grouped by enclosing `.git` project and sorted by size (largest first), with a green-to-red colour ramp. Hidden and ignored files are included. Requires `fd` and `stat`.
 
 ```sh
 big-files                # scan the current directory, over 5 MB
@@ -122,7 +125,7 @@ hooks:
   deactivated: /home/bubba/Projects/_scripts/src/lact-gaming.sh off
 ```
 
-Requires `kscreen-doctor`, `loginctl`, and `runuser` (util-Linux).
+Requires `kscreen-doctor`, `loginctl`, `runuser` and `setsid` (util-Linux), plus `pgrep`/`pkill` (procps-ng) and `awk`.
 
 ---
 
@@ -149,8 +152,6 @@ DRY_RUN=1 opencode-maintenance       # report the full plan, change nothing, no 
 BACKUP=1 SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 DO_VACUUM=1 opencode-maintenance   # unattended, with backup
 ```
 
-### Settings
-
 All are environment variables; none are command-line flags. Setting one skips the matching prompt.
 
 | Variable | Default | Effect |
@@ -173,18 +174,6 @@ All are environment variables; none are command-line flags. Setting one skips th
 
 ---
 
-## opencode-update
-
-Updates the opencode CLI and desktop AppImage from the latest GitHub release. Skips if already current, stops running opencode processes before replacing binaries in `~/.local/bin`.
-
-```sh
-opencode-update
-```
-
-Requires `curl` and `jq`.
-
----
-
 ## last-installed
 
 Colourized tail of `/var/log/pacman.log`. Actions are colour-coded and labelled `major`, `minor`, `patch`, `build`, `pkgrel` or `epoch`. Requires `awk`.
@@ -198,7 +187,7 @@ last-installed 100     # last 100
 
 ## long-files
 
-Reports text files exceeding 400 lines (or a custom limit), grouped by enclosing `.git` project and sorted by line count (largest first). Files outside any `.git` project are grouped by their top-level directory. Binary files are detected by content, so no extension whitelist is involved.
+Reports text files exceeding 400 lines (or a custom limit), grouped by enclosing `.git` project and sorted by line count (largest first). Files outside any `.git` project are grouped by their top-level directory. Binary files are detected by content, so no extension whitelist is involved. Hidden files and paths matched by `.gitignore` are skipped (unlike `big-files`). Requires `fd`, `grep`, `xargs` and `wc`.
 
 ```sh
 long-files                # scan the current directory, limit 400 lines
@@ -209,9 +198,27 @@ long-files /some/dir 800  # both
 
 ---
 
+## music
+
+FLAC library tooling under `src/music/`. `flac-conversion.py` caps a library at 16-bit / 48 kHz into a separate tree; see `src/music/README.md` for its `scan` / `convert` / `verify` / `move` workflow, defaults and caveats.
+
+`artists-with-flac.sh` prints each artist directory under `/mnt/data/Music` that holds at least one FLAC.
+
+`music-48k-move.sh` replaces library files with the converted copies from `/mnt/data/Music-48k`, matching by relative path only. Dry run by default; `--apply` moves. It also reports per-directory files present on only one side.
+
+```sh
+./src/music/artists-with-flac.sh
+./src/music/music-48k-move.sh           # dry run: list what would be replaced
+./src/music/music-48k-move.sh --apply   # replace matching library files
+```
+
+Both shell scripts hardcode their library paths: `/mnt/data/Music` for both, plus `/mnt/data/Music-48k` for the move script.
+
+---
+
 ## old-files
 
-Lists files not touched for 90 days (or a custom age), one `date`, `age` and `path` line per file, sorted by path. Date and age are colour-ramped from pale red at 6 months to full red at 5 years and beyond; younger entries stay uncoloured. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned and the scan stays on one filesystem.
+Lists files not touched for 90 days (or a custom age), one `date`, `age` and `path` line per file, sorted by path. Date and age are colour-ramped from pale red at 6 months to full red at 5 years and beyond; younger entries stay uncoloured. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned, the scan stays on one filesystem, and it stops four directory levels below the base (`find -maxdepth 4`).
 
 With `-d`/`--dirs` it lists directories instead of files, reporting only those none of whose content has been touched since the cutoff; the date shown is then that of the directory's newest descendant, and deeper matches collapse into their newest ancestor, so a dormant tree is reported once rather than per directory.
 

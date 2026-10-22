@@ -4,24 +4,26 @@
 
 - Name: scripts
 - Description: Collection of fish functions and shell scripts for maintaining an Arch-based (CachyOS) system and its git repositories.
-- Tech: fish shell, bash, python3, pacman/paccache, yay (AUR), git, jq, curl, kscreen-doctor, ffmpeg, metaflac.
+- Tech: fish shell, bash, python3, pacman/paccache, yay (AUR), git, jq, curl, fd, sqlite3, gzip, kscreen-doctor, ffmpeg, metaflac.
 
 ## Key Files
 
-All scripts live in `src/`:
+Scripts live in `src/`, with music tooling in `src/music/`:
 
 - `src/repository-clean.fish` — list then clean pacman/AUR package leftovers (orphans, caches, unneeded deps).
 - `src/git-maintenance.fish` — safely optimize every git repo under a directory tree; report (and, with `-u`, untrack) tracked+ignored files.
 - `src/big-files.fish` — list files above a size threshold (default 5 MB), largest first.
 - `src/long-files.fish` — report text files over 400 lines, grouped by project.
-- `src/opencode-update.fish` — update the opencode CLI and desktop AppImage.
+- `src/old-files.fish` — list files not touched for 90 days, or directories with `-dirs`.
 - `src/last-installed.fish` — colorized tail of pacman.log with version-diff highlighting.
 - `src/install-apps.sh` — install a fixed set of repo and AUR packages.
-- `src/monitor-refresh.sh` — switch the DP-1 monitor refresh rate (LACT profile hook).
 - `src/lact-gaming.sh` — LACT Gaming hook: switch refresh rate and park/restore tray apps.
 - `src/opencode-maintenance.sh` — back up, prune (dead-path, legacy, age) and VACUUM the OpenCode DB; clean snapshot dirs; rotate its log.
 - `src/health-check.sh` — read-only report of system-wide issues (units, packages, logs, Btrfs, SMART).
-- `src/flac-conversion/flac-conversion.py` — scan a FLAC tree, transcode anything above 16-bit/48 kHz into a separate tree, verify the outputs.
+- `src/music/flac-conversion.py` — scan a FLAC tree, transcode anything above 16-bit/48 kHz into a separate tree, verify the outputs.
+- `src/music/artists-with-flac.sh` — list Music artists that contain at least one FLAC.
+- `src/music/music-48k-move.sh` — replace library files with their converted 48 kHz copies (dry run by default, `--apply` to move).
+- `src/music/README.md` — flac-conversion workflow, defaults and caveats.
 - `README.md` — usage and overview.
 
 ## Workflow
@@ -29,7 +31,7 @@ All scripts live in `src/`:
 ### Commands
 
 - Install (fish): source `src/<name>.fish`, or copy to `~/.config/fish/functions/`.
-- Install (shell): `chmod +x src/*.sh` and run directly.
+- Install (shell): `chmod +x src/*.sh src/music/*.sh` and run directly.
 - Dev: edit the script; reload fish config or re-source the file.
 - Test: `fish -n src/<name>.fish` (fish syntax check) and `bash -n src/<name>.sh` (bash syntax check).
 - Lint: none configured.
@@ -54,7 +56,7 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 ## File System Access
 
 - Allowed: <project root> and all contained directories + files; `/tmp/*`
-- Read-Only: `.env*`, `.git/`, `.docs/Todo.md`
+- Read-Only: `.env*`, `.git/`, `.docs/ToDo.md`
 - Disallowed: everything not listed in 'Allowed' unless user grants permission.
 - Require confirmation: adding/removing dependencies, any operation outside project root
 - Do not delete files or make destructive changes without confirmation.
