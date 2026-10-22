@@ -13,7 +13,7 @@ All scripts live in `src/`:
 - `src/repository-clean.fish` — list then clean pacman/AUR package leftovers (orphans, caches, unneeded deps).
 - `src/git-maintenance.fish` — safely optimize every git repo under a directory tree; report (and, with `-u`, untrack) tracked+ignored files.
 - `src/big-files.fish` — list files above a size threshold (default 5 MB), largest first.
-- `src/long-files.fish` — report source files over 400 lines, grouped by project.
+- `src/long-files.fish` — report text files over 400 lines, grouped by project.
 - `src/opencode-update.fish` — update the opencode CLI and desktop AppImage.
 - `src/last-installed.fish` — colorized tail of pacman.log with version-diff highlighting.
 - `src/install-apps.sh` — install a fixed set of repo and AUR packages.

@@ -12,7 +12,7 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 | `src/install-apps.sh`           | shell script  | Install a fixed set of repo and AUR packages. |
 | `src/lact-gaming.sh`            | shell script  | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
 | `src/last-installed.fish`       | fish function | Recent pacman transactions, colourized, with changed version parts highlighted. |
-| `src/long-files.fish`           | fish function | Report source files over 400 lines, grouped by project. |
+| `src/long-files.fish`           | fish function | Report text files over 400 lines, grouped by project. |
 | `src/music/flac-conversion.py`  | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
 | `src/opencode-maintenance.sh`   | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | `src/opencode-update.fish`      | fish function | Update the opencode CLI and desktop AppImage. |
@@ -198,7 +198,7 @@ last-installed 100     # last 100
 
 ## long-files
 
-Reports source files exceeding 400 lines (or a custom limit), grouped by enclosing `.git` project and sorted by line count (largest first). Files outside any `.git` project are grouped by their top-level directory.
+Reports text files exceeding 400 lines (or a custom limit), grouped by enclosing `.git` project and sorted by line count (largest first). Files outside any `.git` project are grouped by their top-level directory. Binary files are detected by content, so no extension whitelist is involved.
 
 ```sh
 long-files                # scan the current directory, limit 400 lines

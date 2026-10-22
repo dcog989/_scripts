@@ -1,4 +1,4 @@
-# Report source files exceeding 400 lines, grouped by their enclosing project
+# Report text files exceeding 400 lines, grouped by their enclosing project
 # and sorted by line count descending (largest first). A directory is treated as
 # a project root when it contains a `.git` marker; files outside any project are
 # grouped by their top-level directory. When `base` is itself a project, all
@@ -40,13 +40,16 @@ function long-files --description 'Recurse project directory for over-sized file
     end
     set -l root_list (string join "$tab" $roots)
 
-    fd -t f -e js -e ts -e jsx -e tsx -e svelte -e slint -e rs -e py -e c -e cpp -e h -e hpp -e go -e rb -e php -e css -e scss -e html -e sql -e sh -e fish --search-path "$base" -x wc -l | awk -v roots="$root_list" -v project="$project" -v base="$base" -v limit="$limit" '
+    # grep -I treats NUL-containing files as binary and skips them, so this
+    # picks up any text file without an extension whitelist.
+    fd -t f --search-path "$base" -0 | xargs -0 -r grep -lIZ '' | xargs -0 -r wc -l | awk -v roots="$root_list" -v project="$project" -v base="$base" -v limit="$limit" '
         BEGIN { n = split(roots, R, "\t"); off = (base == "/" ? 1 : length(base) + 1) }
         {
             count = $1
             $1 = ""
             sub(/^ +/, "")
             path = $0
+            if (path == "total") next
             if (count <= limit) next
             if (project != "") {
                 best = project
