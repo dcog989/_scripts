@@ -39,19 +39,19 @@ ln -sf /path/to/src ~/.local/bin/  # symlink to `PATH`. Note: extension not need
 
 ## repository-clean
 
-Lists and cleans pacman/AUR package leftovers on Arch-based systems. Prints a report, asks for confirmation, then runs the cleanup.
+Lists and cleans pacman/AUR package leftovers. Prints a report, asks for confirmation, then cleans.
 
 Cleans:
 
 - **Orphans** — packages installed as dependencies that are no longer required (`pacman -Qdtq`).
-- **Package cache** — prunes `/var/cache/pacman/pkg` with `paccache -k 3`, then drops every cached version of an uninstalled package. The report previews what those steps actually reclaim (cached versions beyond keep-3 plus every version of an uninstalled package).
-- **Stale download dirs** — removes the `download-XXXXXX` temp dirs libalpm leaks into the package cache after an interrupted download. `pacman -Sc` fails with `Error reading fd 8` while they are there. Skipped while pacman is running.
-- **AUR build cache** — reports and cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present.
+- **Package cache** — prunes `/var/cache/pacman/pkg` with `paccache -k 3`, then drops every cached version of an uninstalled package. The report previews what both steps reclaim.
+- **Stale download dirs** — removes the `download-XXXXXX` temp dirs libalpm leaks after an interrupted download. `pacman -Sc` fails with `Error reading fd 8` while they are there. Skipped while pacman runs.
+- **AUR build cache** — cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present.
 - **Unneeded AUR deps** — removes orphaned AUR dependencies via `yay -Yc` / `paru -c`.
 
-The closing summary counts what each step removed (packages, cache files, stale dirs) and how much space the pacman and AUR caches gave back.
+The closing summary counts what each step removed (packages, cache files, stale dirs) and how much space the caches gave back.
 
-Requires `pacman`, `paccache`, `find`, `pgrep` and optionally `yay` or `paru`. Destructive operations run only after one confirmation; pacman/paccache steps require `sudo`. If no AUR helper is found, AUR-specific steps are skipped with a notice. The AUR build cache is emptied directly (`rm -rf ~/.cache/yay/*`), not via `yay -Sc`, because `-Sc` also runs `pacman -Sc` and would collapse the keep-3 policy.
+Requires `pacman`, `paccache`, `find`, `pgrep`, optionally `yay` or `paru`. One confirmation guards everything; pacman/paccache steps need `sudo`. No AUR helper: AUR steps skip with a notice. The build cache is emptied directly (`rm -rf ~/.cache/yay/*`), not via `yay -Sc`, which also runs `pacman -Sc` and would break the keep-3 policy.
 
 ```sh
 repository-clean
@@ -61,11 +61,11 @@ repository-clean
 
 ## git-maintenance
 
-Safe git maintenance for every repository under a directory tree. It never touches the working tree: no `git clean`, no reflog expiry, no `--prune=now`, and never deletes branches, tags, stashes or remotes.
+Safe git maintenance for every repository under a directory tree. Never touches the working tree: no `git clean`, no reflog expiry, no `--prune=now`, and never deletes branches, tags, stashes or remotes.
 
-Each repo reports size before/after, loose→packed object counts, pruned remote refs, and the `fsck` result. The closing summary totals repos optimized/skipped (scanned/skipped in dry-run), space reclaimed and remote refs pruned, then lists every tracked+ignored file (as `repo/path`) and any repo with `fsck` errors.
+Each repo reports size before/after, loose→packed object counts, pruned remote refs and the `fsck` result. The summary totals repos optimized/skipped (scanned/skipped in dry-run), space reclaimed and refs pruned, then lists every tracked+ignored file (as `repo/path`) and any repo with `fsck` errors.
 
-It also reports files that are both tracked and ignored (a tracked file listed in `.gitignore` is usually a mistake). With `-u` it untracks them: removal uses `git rm --cached`, keeping the file on disk and only stopping tracking; changes are staged, not committed. Submodule gitlinks are skipped. Under `-n` these files are reported but not untracked.
+Tracked files listed in `.gitignore` are usually a mistake. `-u` untracks them with `git rm --cached`: file kept on disk, changes staged, not committed. Submodule gitlinks are skipped. `-n` reports them without untracking.
 
 ```sh
 git-maintenance                 # optimize all repos under /home/bubba/Projects
@@ -80,7 +80,7 @@ git-maintenance -a              # aggressive: --aggressive --prune=now (much slo
 
 ## big-files
 
-Lists files larger than a size threshold (in MB), grouped by enclosing `.git` project and sorted by size (largest first), with a green-to-red colour ramp. Hidden and ignored files are included. Requires `fd` and `stat`.
+Lists files above a size threshold (MB), grouped by enclosing `.git` project, largest first, with a green-to-red colour ramp. Hidden and ignored files included. Requires `fd` and `stat`.
 
 ```sh
 big-files                # scan the current directory, over 5 MB
@@ -95,7 +95,7 @@ big-files /some/dir 50   # both
 
 ## install-apps
 
-Installs a fixed set of packages: repo apps via `pacman` and AUR apps via `yay` (or `paru` when yay is absent). Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
+Installs a fixed set of packages: repo apps via `pacman`, AUR apps via `yay` (or `paru` when yay is absent). Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
 
 ```sh
 ./src/install-apps.sh
@@ -105,12 +105,12 @@ Installs a fixed set of packages: repo apps via `pacman` and AUR apps via `yay` 
 
 ## lact-gaming
 
-LACT "Gaming" profile hook combining the refresh switch with parking lightweight background tray apps.
+LACT "Gaming" profile hook: monitor refresh switch plus parking background tray apps.
 
-- `on` — record the refresh mode that was active beforehand, stop any running `cliptoo` and KopiaUI (`/opt/KopiaUI/kopia-ui`) instances (recording which ones were running), then switch `DP-1` to 240Hz.
-- `off` — restore the recorded refresh mode (falling back to 120Hz if none was captured), then restart only the apps that were running at activation. State lives in `~/.local/state/lact-gaming/state`.
+- `on` — records the active refresh mode, stops any running `cliptoo` and KopiaUI (`/opt/KopiaUI/kopia-ui`) instances (recording which), then switches `DP-1` to 240Hz.
+- `off` — restores the recorded mode (120Hz fallback if none was captured), then restarts only the apps that were running at activation. State lives in `~/.local/state/lact-gaming/state`.
 
-Activation is idempotent: if the state file already exists (a previous `off` never fired), the recorded mode and apps are kept rather than overwritten, so a later `off` still restores them.
+Idempotent: an existing state file (a previous `off` never fired) is kept rather than overwritten, so a later `off` still restores the right mode and apps.
 
 ```sh
 ./src/lact-gaming.sh on     # gaming profile activated
@@ -131,20 +131,20 @@ Requires `kscreen-doctor`, `loginctl`, `runuser` and `setsid` (util-Linux), plus
 
 ## opencode-maintenance
 
-Maintenance for OpenCode v2 database:
+Maintenance for the OpenCode v2 database:
 
-- Backs up the DB first: `sqlite3 .backup` piped through `gzip` to `~/Downloads/opencode-db-<date>.db.gz`, keeping the 3 newest.
-- Removes SQLite rows for project directories that no longer exist (which otherwise surface as "Failed to send prompt / Unable to retrieve session").
-- Drops the frozen legacy `session`/`message`/`part` rows that OpenCode migrated to `session_v2`/`session_message` (only rows also present in `session_v2`, so no history is lost).
+- Backs up first: `sqlite3 .backup` piped through `gzip` to `~/Downloads/opencode-db-<date>.db.gz`, keeping the 3 newest.
+- Removes rows for project directories that no longer exist (they surface as "Failed to send prompt / Unable to retrieve session").
+- Drops the frozen legacy `session`/`message`/`part` rows migrated to `session_v2`/`session_message`, but only rows also present in `session_v2`, so no history is lost.
 - Optionally prunes sessions with no activity for a number of days.
-- Deletes `snapshot/<project-id>/` git dirs for projects no longer in the DB (revert snapshots; `global` is kept).
-- Rotates `~/.local/share/opencode/log/opencode.log` and its own run transcript, `~/.local/state/opencode/maintenance/maintenance.log`, past `LOG_MAX_MB`.
+- Deletes `snapshot/<project-id>/` git dirs with no DB row (revert snapshots; `global` kept).
+- Rotates `~/.local/share/opencode/log/opencode.log` and its own transcript, `~/.local/state/opencode/maintenance/maintenance.log`, past `LOG_MAX_MB`.
 - Runs `VACUUM`.
-- Prints a `summary` line with rows pruned, DB file size delta / reusable pages, snapshot and log bytes freed.
+- Prints a `summary` line: rows pruned, DB size delta / reusable pages, snapshot and log bytes freed.
 
-From a terminal it prompts for backup, dead-path grace, session age, VACUUM options. With no tty (cron, systemd `--user`) it runs unattended: VACUUM on, backup off, no age prune. Any setting can be pinned with its env var, which also skips that prompt.
+From a terminal it prompts for backup, dead-path grace, session age and VACUUM. With no tty (cron, systemd `--user`) it runs unattended: VACUUM on, backup off, no age prune. Pinning a setting with its env var skips that prompt.
 
-A path must be missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) are considered, and DB writes (including the backup and `VACUUM`, which needs an exclusive lock) are skipped while OpenCode is running — snapshot and log cleanup still run. Output is appended to `~/.local/state/opencode/maintenance/maintenance.log` and echoed to the terminal.
+A path must stay missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) count, and DB writes (backup and `VACUUM`, which needs an exclusive lock) are skipped while OpenCode runs — snapshot and log cleanup still run. Output goes to `~/.local/state/opencode/maintenance/maintenance.log` and the terminal.
 
 ```sh
 opencode-maintenance                 # interactive: 4 questions, Enter = defaults
@@ -152,25 +152,25 @@ DRY_RUN=1 opencode-maintenance       # report the full plan, change nothing, no 
 BACKUP=1 SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 DO_VACUUM=1 opencode-maintenance   # unattended, with backup
 ```
 
-All are environment variables; none are command-line flags. Setting one skips the matching prompt.
+All are environment variables; none are command-line flags.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `BACKUP` | prompt (`Y`); `0` when unattended, `1` under `DRY_RUN` | Gzipped DB backup before any write. A failed backup aborts the run. |
 | `BACKUP_DIR` | `~/Downloads` | Where `opencode-db-<date>.db.gz` goes. |
-| `BACKUP_KEEP` | `3` | Newest backups kept; older ones are deleted after each successful backup. |
+| `BACKUP_KEEP` | `3` | Newest backups kept; older ones deleted after each successful backup. |
 | `DEAD_GRACE_DAYS` | prompt (`7`) | Days a missing project path must stay missing before its rows are pruned. Also the minimum age of an orphan snapshot dir. |
-| `SESSION_MAX_AGE_DAYS` | prompt (`60`); `0` when unattended, `60` under `DRY_RUN` | Prune sessions with no activity for this many days. `0` disables. Without a tty it also needs `ASSUME_YES=1`, otherwise the prune is skipped. |
+| `SESSION_MAX_AGE_DAYS` | prompt (`60`); `0` when unattended, `60` under `DRY_RUN` | Prune sessions inactive this many days. `0` disables. Without a tty it also needs `ASSUME_YES=1`, else the prune is skipped. |
 | `ASSUME_YES` | `0` | `1` deletes ripe sessions without the `[y/N]` confirmation. |
-| `DO_VACUUM` | prompt (`Y`) / `1` | Run `VACUUM` at the end. Needs OpenCode closed; compacts pages freed by earlier runs too. |
-| `LOG_MAX_MB` | `50` | Rotate `opencode.log` and `maintenance.log` once above this size. `0` disables rotation. |
-| `LOG_KEEP` | `3` | Number of `.gz` archives kept per log. |
+| `DO_VACUUM` | prompt (`Y`) / `1` | Run `VACUUM` at the end. Needs OpenCode closed; also compacts pages freed by earlier runs. |
+| `LOG_MAX_MB` | `50` | Rotate `opencode.log` and `maintenance.log` above this size. `0` disables. |
+| `LOG_KEEP` | `3` | `.gz` archives kept per log. |
 | `ROOTS` | `$HOME/Projects` | Space-separated allowlist of path prefixes; sessions outside it are never pruned. Quote multiple: `ROOTS="$HOME/Projects /mnt/data/src"`. |
 | `SNAP_DIR` | `$OC_DIR/snapshot` | Revert-snapshot store; project dirs without a DB row are deleted once older than `DEAD_GRACE_DAYS`. |
 | `OC_DIR` | `~/.local/share/opencode` | Base data directory; `OC_DB` and `OC_LOG` default inside it. |
 | `OC_DB`, `OC_LOG` | `$OC_DIR/opencode.db`, `$OC_DIR/log/opencode.log` | Override the DB or log path. |
 | `OC_STATE` | `~/.local/state/opencode` | Parent of `maintenance/` (lock, dead-path state, transcript). |
-| `DRY_RUN` | `0` | `1` logs every action as `DRY RUN - would ...`, skips all prompts, and makes no DB, snapshot or log-rotation changes; the run transcript is still appended. |
+| `DRY_RUN` | `0` | `1` logs every action as `DRY RUN - would ...`, skips all prompts, and changes no DB, snapshot or log state; the transcript is still appended. |
 
 ---
 
@@ -187,7 +187,7 @@ last-installed 100     # last 100
 
 ## long-files
 
-Reports text files exceeding 400 lines (or a custom limit), grouped by enclosing `.git` project and sorted by line count (largest first). Files outside any `.git` project are grouped by their top-level directory. Binary files are detected by content, so no extension whitelist is involved. Hidden files and paths matched by `.gitignore` are skipped (unlike `big-files`). Requires `fd`, `grep`, `xargs` and `wc`.
+Reports text files over 400 lines (or a custom limit), grouped by enclosing `.git` project, largest first. Files outside any `.git` project group by top-level directory. Binary detection is by content, so no extension whitelist. Hidden files and `.gitignore` matches are skipped (unlike `big-files`). Requires `fd`, `grep`, `xargs` and `wc`.
 
 ```sh
 long-files                # scan the current directory, limit 400 lines
@@ -202,7 +202,7 @@ long-files /some/dir 800  # both
 
 FLAC library tooling under `src/music/`. `flac-conversion.py` caps a library at 16-bit / 48 kHz into a separate tree; see `src/music/README.md` for its `scan` / `convert` / `verify` / `move` workflow, defaults and caveats.
 
-`artists-with-flac.sh` prints each artist directory under `/mnt/data/Music` that holds at least one FLAC.
+`artists-with-flac.sh` prints each artist directory under `/mnt/data/Music` holding at least one FLAC.
 
 `music-48k-move.sh` replaces library files with the converted copies from `/mnt/data/Music-48k`, matching by relative path only. Dry run by default; `--apply` moves. It also reports per-directory files present on only one side.
 
@@ -212,15 +212,15 @@ FLAC library tooling under `src/music/`. `flac-conversion.py` caps a library at 
 ./src/music/music-48k-move.sh --apply   # replace matching library files
 ```
 
-Both shell scripts hardcode their library paths: `/mnt/data/Music` for both, plus `/mnt/data/Music-48k` for the move script.
+Both shell scripts hardcode their paths: `/mnt/data/Music` for both, plus `/mnt/data/Music-48k` for the move script.
 
 ---
 
 ## old-files
 
-Lists files not touched for 90 days (or a custom age), one `date`, `age` and `path` line per file, sorted by path. Date and age are colour-ramped from pale red at 6 months to full red at 5 years and beyond; younger entries stay uncoloured. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned, the scan stays on one filesystem, and it stops four directory levels below the base (`find -maxdepth 4`).
+Lists files not touched for 90 days (or a custom age), one `date`, `age`, `path` line each, sorted by path. Date and age ramp from pale red at 6 months to full red at 5 years and beyond; younger entries stay uncoloured. Prunes `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv`, stays on one filesystem, and stops four levels below the base (`find -maxdepth 4`).
 
-With `-d` it lists directories instead of files, reporting only those none of whose content has been touched since the cutoff; the date shown is then that of the directory's newest descendant, and deeper matches collapse into their newest ancestor, so a dormant tree is reported once rather than per directory.
+With `-d` it lists directories instead of files, reporting only those with no content touched since the cutoff; the date shown is the newest descendant's, and deeper matches collapse into their newest ancestor, so a dormant tree is reported once rather than per directory.
 
 ```sh
 old-files                # scan the current directory, 90 days
@@ -234,15 +234,15 @@ old-files -d             # directories rather than files
 
 ## health-check
 
-Read-only report of potential system-wide issues. Signal-only: it prints a section only when a check finds something, filters known-benign log/package noise, and exits non-zero when any issue group is found.
+Read-only report of potential system-wide issues. Signal-only: a section prints only when a check finds something, known-benign log/package noise is filtered, and the exit code is non-zero when any issue group is found.
 
 - **Failed units** — failed system and user systemd units.
 - **Packaging** — `pacman -Dk` database errors, `pacman -Qkq` missing package files (expected runtime paths filtered), `pacman -Qtdq` true orphans, and `paccheck --md5sum --files --quiet` when `pacutils` is installed.
-- **Logs** — priority-`err` journal lines for the current boot, kernel-only `err` lines, and `dmesg --level=err,warn`.
+- **Logs** — priority-`err` journal lines for this boot, kernel-only `err` lines, and `dmesg --level=err,warn`.
 - **Btrfs** — `device stats` error counters and `scrub status -R` per detected filesystem.
 - **SMART** — health verdict plus critical attributes per detected disk.
 
-Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and are counted as skipped otherwise, so the report still runs unprivileged.
+Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and count as skipped otherwise, so the report still runs unprivileged.
 
 ```sh
 ./src/health-check.sh              # full report (only findings shown)
@@ -251,6 +251,6 @@ Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and 
 ./src/health-check.sh --no-sudo    # skip privileged checks (no effect as root)
 ```
 
-Suppressed patterns are extended regexes: built-in defaults plus any lines in `~/.config/health-check/ignore` (override with `HEALTH_CHECK_IGNORE`). Run with `-v` to see the unfiltered output before adding a pattern.
+Suppressed patterns are extended regexes: built-in defaults plus any lines in `~/.config/health-check/ignore` (override with `HEALTH_CHECK_IGNORE`). Use `-v` to see unfiltered output before adding a pattern.
 
 Requires `systemctl`, `journalctl`, `pacman`. Optional: `paccheck` (pacutils), `btrfs-progs`, `smartmontools`. Btrfs mounts and block devices are auto-detected; override with `BTRFS_MOUNTS` / `SMART_DEVICES`. `MAX_LINES` (default 25) caps lines shown per findings list.
