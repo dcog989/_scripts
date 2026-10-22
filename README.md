@@ -17,7 +17,7 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 | `src/opencode-maintenance.sh`   | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | `src/opencode-update.fish`      | fish function | Update the opencode CLI and desktop AppImage. |
 | `src/repository-clean.fish`     | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
-| `src/stale.sh`                  | shell script  | List content not touched for 80 days. |
+| `src/stale.fish`                | fish function | List content not touched for 90 days. |
 
 ## Install Fish Functions
 
@@ -205,6 +205,19 @@ long-files                # scan the current directory, limit 400 lines
 long-files /some/dir      # scan a specific directory
 long-files 800            # custom line limit
 long-files /some/dir 800  # both
+```
+
+---
+
+## stale
+
+Lists directories none of whose content has been touched for 90 days (or a custom age), one `date<TAB>path` line per directory, sorted by path. Deeper matches are collapsed into their newest ancestor, so a dormant tree is reported once rather than per directory. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned and the scan stays on one filesystem.
+
+```sh
+stale                # scan the current directory, 90 days
+stale /some/dir      # scan a specific directory
+stale 30             # 30 days
+stale /some/dir 30   # both
 ```
 
 ---
