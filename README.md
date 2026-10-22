@@ -6,19 +6,19 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 
 | Script | Type | Purpose |
 | --- | --- | --- |
-| `src/big-files.fish`             | fish function | List files above a size threshold, largest first. |
-| `src/git-maintenance.fish`       | fish function | Optimize and report issues for every git repo under a directory tree. |
-| `src/health-check.sh`            | shell script  | Read-only report of system-wide issues. |
-| `src/install-apps.sh`            | shell script  | Install a fixed set of repo and AUR packages. |
-| `src/lact-gaming.sh`             | shell script  | LACT Gaming hook: switch monitor refresh rate and park/restore apps. |
-| `src/last-installed.fish`        | fish function | List recently installed pacman/AUR apps. |
-| `src/long-files.fish`            | fish function | List text files by line length, grouped by directory. |
-| `src/music/artists-with-flac.sh` | shell script  | List artists under `/mnt/data/Music` that contain FLAC files. |
-| `src/music/flac-conversion.py`   | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
-| `src/music/music-48k-move.sh`    | shell script  | Replace library files with their converted 48 kHz counterparts (dry run by default). |
-| `src/old-files.fish`             | fish function | List files older than a number of days. Optionally directories with `-d`. |
-| `src/opencode-maintenance.sh`    | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
-| `src/repository-clean.fish`      | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
+| [`src/big-files.fish`](#big-files)                      | fish function | List files above a size threshold, largest first. |
+| [`src/git-maintenance.fish`](#git-maintenance)          | fish function | Optimize and report issues for every git repo under a directory tree. |
+| [`src/health-check.sh`](#health-check)                  | shell script  | Read-only report of system-wide issues. |
+| [`src/install-apps.sh`](#install-apps)                  | shell script  | Install a fixed set of repo and AUR packages. |
+| [`src/lact-gaming.sh`](#lact-gaming)                    | shell script  | LACT Gaming hook: switch monitor refresh rate and park/restore apps. |
+| [`src/last-installed.fish`](#last-installed)            | fish function | List recently installed pacman/AUR apps. |
+| [`src/long-files.fish`](#long-files)                    | fish function | List text files by line length, grouped by directory. |
+| [`src/music/artists-with-flac.sh`](#music)              | shell script  | List artists under `/mnt/data/Music` that contain FLAC files. |
+| [`src/music/flac-conversion.py`](#music)                | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
+| [`src/music/music-48k-move.sh`](#music)                 | shell script  | Replace library files with their converted 48 kHz counterparts (dry run by default). |
+| [`src/old-files.fish`](#old-files)                      | fish function | List files older than a number of days. Use `-d` for directories. |
+| [`src/opencode-maintenance.sh`](#opencode-maintenance)  | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
+| [`src/repository-clean.fish`](#repository-clean)        | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
 
 ---
 
