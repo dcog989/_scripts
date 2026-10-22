@@ -17,7 +17,7 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 | `src/opencode-maintenance.sh`   | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | `src/opencode-update.fish`      | fish function | Update the opencode CLI and desktop AppImage. |
 | `src/repository-clean.fish`     | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
-| `src/stale.fish`                | fish function | List content not touched for 90 days. |
+| `src/old-files.fish`            | fish function | List files not touched for 90 days, or directories with `-dirs`. |
 
 ## Install Fish Functions
 
@@ -209,15 +209,18 @@ long-files /some/dir 800  # both
 
 ---
 
-## stale
+## old-files
 
-Lists directories none of whose content has been touched for 90 days (or a custom age), one `date`, `age` and `path` line per directory, sorted by path. Date and age are colour-ramped from pale red at 6 months to full red at 5 years and beyond; younger entries stay uncoloured. Deeper matches are collapsed into their newest ancestor, so a dormant tree is reported once rather than per directory. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned and the scan stays on one filesystem.
+Lists files not touched for 90 days (or a custom age), one `date`, `age` and `path` line per file, sorted by path. Date and age are colour-ramped from pale red at 6 months to full red at 5 years and beyond; younger entries stay uncoloured. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned and the scan stays on one filesystem.
+
+With `-d`/`--dirs` it lists directories instead of files, reporting only those none of whose content has been touched since the cutoff; the date shown is then that of the directory's newest descendant, and deeper matches collapse into their newest ancestor, so a dormant tree is reported once rather than per directory.
 
 ```sh
-stale                # scan the current directory, 90 days
-stale /some/dir      # scan a specific directory
-stale 30             # 30 days
-stale /some/dir 30   # both
+old-files                # scan the current directory, 90 days
+old-files /some/dir      # scan a specific directory
+old-files 30             # 30 days
+old-files /some/dir 30   # both
+old-files -d             # directories rather than files
 ```
 
 ---
