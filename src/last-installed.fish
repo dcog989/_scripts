@@ -14,10 +14,20 @@ function last-installed --description 'Colourised tail of pacman transactions wi
         return 1
     end
 
-    awk -v count=$count '
+    # Foreign packages (AUR) are those absent from every sync database.
+    # shortcut: packages promoted into a repo or dropped from all repos since
+    # install are mislabelled; upgrade if pacman ever logs the origin.
+    set -l repo_file
+    if command -q pacman
+        set repo_file (mktemp)
+        pacman -Slq 2>/dev/null | sort -u > $repo_file; or set repo_file ""
+        test -s "$repo_file"; or set repo_file ""
+    end
+
+    awk -v count=$count -v repo_file="$repo_file" '
     BEGIN {
         e = "\033"
-        dim = e "[2m"; rst = e "[0m"; bold = e "[1m"
+        dim = e "[2m"; rst = e "[0m"; bold = e "[1m"; pink = e "[38;5;213m"
         act["upgraded"]    = e "[1;32m"
         act["installed"]   = e "[1;36m"
         act["reinstalled"] = e "[1;35m"
@@ -25,6 +35,10 @@ function last-installed --description 'Colourised tail of pacman transactions wi
         lvl[2] = e "[1;33m"; name[2] = "minor"
         lvl[3] = e "[1;32m"; name[3] = "patch"
         lvl[4] = e "[1;34m"; name[4] = "build"
+        if (repo_file != "") {
+            while ((getline pkg < repo_file) > 0) repo[pkg] = 1
+            close(repo_file)
+        }
     }
 
     function parse(v, p,   s, n, i) {
@@ -73,6 +87,7 @@ function last-installed --description 'Colourised tail of pacman transactions wi
             body = v
         }
         if (tag != "") body = body "  " tagcol "(" tag ")" rst
+        if (repo_file != "" && !($4 in repo)) body = body " " pink "*AUR" rst
         buf[cnt % count] = dim substr($1, 2, 10) " " substr($1, 13, 5) rst "  " \
             act[$3] sprintf("%-11s", $3) rst " " bold sprintf("%-24s", $4) rst "  " body
         cnt++
@@ -83,4 +98,5 @@ function last-installed --description 'Colourised tail of pacman transactions wi
         for (i = start; i < cnt; i++) print buf[i % count]
     }
     ' $log
+    test -n "$repo_file"; and rm -f $repo_file
 end

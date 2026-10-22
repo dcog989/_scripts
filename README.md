@@ -176,7 +176,7 @@ All are environment variables; none are command-line flags. Setting one skips th
 
 ## last-installed
 
-Colourized tail of `/var/log/pacman.log`. Actions are colour-coded and labelled `major`, `minor`, `patch`, `build`, `pkgrel` or `epoch`. Requires `awk`.
+Colourized tail of `/var/log/pacman.log`. Actions are colour-coded and labelled `major`, `minor`, `patch`, `build`, `pkgrel` or `epoch`; packages absent from every sync database (AUR/foreign) get a pink `*AUR` marker. Requires `awk` and `pacman`.
 
 ```sh
 last-installed         # last 50 transactions
