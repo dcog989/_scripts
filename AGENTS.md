@@ -14,7 +14,7 @@ Scripts live in `src/`, with music tooling in `src/music/`:
 - `src/git-maintenance.fish` — safely optimize every git repo under a directory tree; report (and, with `-u`, untrack) tracked+ignored files.
 - `src/big-files.fish` — list files above a size threshold (default 5 MB), largest first.
 - `src/long-files.fish` — report text files over 400 lines, grouped by project.
-- `src/old-files.fish` — list files not touched for 90 days, or directories with `-dirs`.
+- `src/old-files.fish` — list files not touched for 90 days, or directories with `-d`.
 - `src/last-installed.fish` — colorized tail of pacman.log with version-diff highlighting.
 - `src/install-apps.sh` — install a fixed set of repo and AUR packages.
 - `src/lact-gaming.sh` — LACT Gaming hook: switch refresh rate and park/restore tray apps.

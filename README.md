@@ -16,7 +16,7 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 | `src/music/artists-with-flac.sh` | shell script  | List artists under `/mnt/data/Music` that contain FLAC files. |
 | `src/music/flac-conversion.py`   | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
 | `src/music/music-48k-move.sh`    | shell script  | Replace library files with their converted 48 kHz counterparts (dry run by default). |
-| `src/old-files.fish`             | fish function | List files older than a number of days. Optionaly directories with `-dirs`. |
+| `src/old-files.fish`             | fish function | List files older than a number of days. Optionally directories with `-d`. |
 | `src/opencode-maintenance.sh`    | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | `src/repository-clean.fish`      | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
 
@@ -220,7 +220,7 @@ Both shell scripts hardcode their library paths: `/mnt/data/Music` for both, plu
 
 Lists files not touched for 90 days (or a custom age), one `date`, `age` and `path` line per file, sorted by path. Date and age are colour-ramped from pale red at 6 months to full red at 5 years and beyond; younger entries stay uncoloured. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned, the scan stays on one filesystem, and it stops four directory levels below the base (`find -maxdepth 4`).
 
-With `-d`/`--dirs` it lists directories instead of files, reporting only those none of whose content has been touched since the cutoff; the date shown is then that of the directory's newest descendant, and deeper matches collapse into their newest ancestor, so a dormant tree is reported once rather than per directory.
+With `-d` it lists directories instead of files, reporting only those none of whose content has been touched since the cutoff; the date shown is then that of the directory's newest descendant, and deeper matches collapse into their newest ancestor, so a dormant tree is reported once rather than per directory.
 
 ```sh
 old-files                # scan the current directory, 90 days

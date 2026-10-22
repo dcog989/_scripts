@@ -1,17 +1,17 @@
 # List files not touched for N days, so dormant content can be found and
-# removed. With `-dirs`, list directories instead, and only those none of whose
+# removed. With `-d`, list directories instead, and only those none of whose
 # content has been touched since the cutoff; the reported date is then that of
 # the directory's newest descendant, and deeper matches collapse into their
 # newest ancestor.
 #
 # Usage:
 #   old-files [dir] [days]
-#   old-files [-d|--dirs] [dir] [days]
+#   old-files [-d] [dir] [days]
 #
 # `dir` defaults to the current directory and `days` to 90. A numeric argument
 # is taken as the age limit; any other argument as the base.
 function old-files --description 'List files not touched for N days'
-    argparse 'd/dirs' -- $argv; or return 2
+    argparse 'd' -- $argv; or return 2
 
     set -l base .
     set -l days 90
@@ -31,7 +31,7 @@ function old-files --description 'List files not touched for N days'
     set -l ramp_start 180
     set -l ramp_end 1825
     set -l dir_mode 0
-    set -q _flag_dirs; and set dir_mode 1
+    set -q _flag_d; and set dir_mode 1
 
     printf 'Content not touched for %s days...\n' $days
 
