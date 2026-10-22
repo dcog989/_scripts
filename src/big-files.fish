@@ -1,31 +1,39 @@
-# Report source files exceeding 400 lines, grouped by their enclosing project
-# and sorted by line count descending (largest first). A directory is treated as
-# a project root when it contains a `.git` marker; files outside any project are
+# List files larger than a size threshold, grouped by their enclosing project
+# and sorted by size descending (largest first). A directory is treated as a
+# project root when it contains a `.git` marker; files outside any project are
 # grouped by their top-level directory. When `base` is itself a project, all
 # results are reported under that project.
 #
 # Usage:
-#   big-files [base] [lines]
+#   big-files [base] [mb]
+#   big-files [-s mb] [base]
 #
-# `base` defaults to the current directory and `lines` to 400. A numeric
-# argument is taken as the line limit; any other argument as the base.
-function big-files --description 'Recurse project directory for over-sized files'
+# `base` defaults to the current directory and the size to 5 (MB). A numeric
+# argument is taken as the size limit; any other argument as the base.
+function big-files --description 'List files larger than a size threshold'
+    argparse 's/size=' -- $argv; or return 2
+
     set -l base .
-    # Files above this many lines are reported; it also anchors the colour ramp.
-    set -l limit 400
+    set -l size 5
+    test -n "$_flag_size"; and set size $_flag_size
     for arg in $argv
-        if string match -qr '^[0-9]+$' -- $arg
-            set limit $arg
+        if string match -qr '^[0-9]*\.?[0-9]+$' -- $arg
+            set size $arg
         else
             set base $arg
         end
+    end
+    if not string match -qr '^[0-9]*\.?[0-9]+$' -- $size
+        echo "big-files: size must be a positive number of MB" >&2
+        return 2
     end
     # Normalized so the awk group can strip it as a literal prefix (fd echoes
     # --search-path verbatim).
     set base (path normalize -- $base)
 
     set -l tab (printf '\t')
-    set -l span (math "$limit * 1.5")
+    set -l span (math "max($size * 4, 1)")
+    set -l bytes (math "round($size * 1048576)")
 
     set -l project
     if test -e "$base/.git"
@@ -40,14 +48,13 @@ function big-files --description 'Recurse project directory for over-sized files
     end
     set -l root_list (string join "$tab" $roots)
 
-    fd -t f -e js -e ts -e jsx -e tsx -e svelte -e slint -e rs -e py -e c -e cpp -e h -e hpp -e go -e rb -e php -e css -e scss -e html -e sql -e sh -e fish --search-path "$base" -x wc -l | awk -v roots="$root_list" -v project="$project" -v base="$base" -v limit="$limit" '
+    fd -H --no-ignore -t f --size "+$bytes"b --search-path "$base" -x stat -c '%s %n' | awk -v roots="$root_list" -v project="$project" -v base="$base" '
         BEGIN { n = split(roots, R, "\t"); off = (base == "/" ? 1 : length(base) + 1) }
         {
-            count = $1
+            mib = $1 / 1048576
             $1 = ""
             sub(/^ +/, "")
             path = $0
-            if (count <= limit) next
             if (project != "") {
                 best = project
             } else {
@@ -66,14 +73,14 @@ function big-files --description 'Recurse project directory for over-sized files
                     else { split(rel, parts, "/"); best = parts[1] }
                 }
             }
-            print best "\t" count "\t" path
-        }' | sort -t "$tab" -k1,1 -k2,2nr | awk -F "$tab" -v limit="$limit" -v span="$span" '
+            print best "\t" mib "\t" path
+        }' | sort -t "$tab" -k1,1 -k2,2nr | awk -F "$tab" -v limit="$size" -v span="$span" '
     function paint(c,   t, g) {
         t = (c - limit) / span
         if (t < 0) t = 0
         if (t > 1) t = 1
         g = int(255 * (1 - t))
-        return esc "[38;2;255;" g ";" g "m" c esc "[0m"
+        return esc "[38;2;255;" g ";" g "m" sprintf("%9.1f MiB", c) esc "[0m"
     }
     BEGIN { esc = sprintf("%c", 27) }
     {
@@ -84,6 +91,6 @@ function big-files --description 'Recurse project directory for over-sized files
             printf "%s=== %s ===%s\n", esc "[1;36m", $1, esc "[0m"
             dir = $1
         }
-        printf "%s\t%s\n", paint($2), $3
+        printf "%s  %s\n", paint($2), $3
     }'
 end

@@ -6,12 +6,13 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 
 | Script | Type | Purpose |
 | --- | --- | --- |
-| `src/big-files.fish`            | fish function | Report source files over 400 lines, grouped by project. |
+| `src/big-files.fish`            | fish function | List files above a size threshold (default 5 MB), largest first. |
 | `src/git-maintenance.fish`      | fish function | Safely optimize every git repo under a directory tree and untrack tracked+ignored files. |
 | `src/health-check.sh`           | shell script  | Read-only report of system-wide issues (units, packages, logs, Btrfs, SMART). |
 | `src/install-apps.sh`           | shell script  | Install a fixed set of repo and AUR packages. |
 | `src/lact-gaming.sh`            | shell script  | LACT Gaming hook: switch refresh rate and park/restore cliptoo and KopiaUI. |
 | `src/last-installed.fish`       | fish function | Recent pacman transactions, colourized, with changed version parts highlighted. |
+| `src/long-files.fish`           | fish function | Report source files over 400 lines, grouped by project. |
 | `src/music/flac-conversion.py`  | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
 | `src/opencode-maintenance.sh`   | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | `src/opencode-update.fish`      | fish function | Update the opencode CLI and desktop AppImage. |
@@ -76,13 +77,15 @@ git-maintenance -a              # aggressive: --aggressive --prune=now (much slo
 
 ## big-files
 
-Reports source files exceeding 400 lines (or a custom limit), grouped by enclosing `.git` project and sorted by line count (largest first). Files outside any `.git` project are grouped by their top-level directory.
+Lists files larger than a size threshold (in MB), grouped by enclosing `.git` project and sorted by size (largest first), with a green-to-red colour ramp. Hidden and ignored files are included.
 
 ```sh
-big-files                # scan the current directory, limit 400 lines
+big-files                # scan the current directory, over 5 MB
 big-files /some/dir      # scan a specific directory
-big-files 800            # custom line limit
-big-files /some/dir 800  # both
+big-files 50             # files over 50 MB
+big-files 0.5            # decimals are fine
+big-files -s 50          # same, via flag
+big-files /some/dir 50   # both
 ```
 
 ---
@@ -189,6 +192,19 @@ Colourized tail of `/var/log/pacman.log`. Actions are colour-coded and labelled 
 ```sh
 last-installed         # last 50 transactions
 last-installed 100     # last 100
+```
+
+---
+
+## long-files
+
+Reports source files exceeding 400 lines (or a custom limit), grouped by enclosing `.git` project and sorted by line count (largest first). Files outside any `.git` project are grouped by their top-level directory.
+
+```sh
+long-files                # scan the current directory, limit 400 lines
+long-files /some/dir      # scan a specific directory
+long-files 800            # custom line limit
+long-files /some/dir 800  # both
 ```
 
 ---
