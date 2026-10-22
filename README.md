@@ -211,7 +211,7 @@ long-files /some/dir 800  # both
 
 ## stale
 
-Lists directories none of whose content has been touched for 90 days (or a custom age), one `date<TAB>path` line per directory, sorted by path. Deeper matches are collapsed into their newest ancestor, so a dormant tree is reported once rather than per directory. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned and the scan stays on one filesystem.
+Lists directories none of whose content has been touched for 90 days (or a custom age), one `date`, `age` and `path` line per directory, sorted by path. Date and age are colour-ramped from pale red at 6 months to full red at 5 years and beyond; younger entries stay uncoloured. Deeper matches are collapsed into their newest ancestor, so a dormant tree is reported once rather than per directory. `.git`, `.cache`, `.bun`, `node_modules`, `target` and `.venv` are pruned and the scan stays on one filesystem.
 
 ```sh
 stale                # scan the current directory, 90 days
