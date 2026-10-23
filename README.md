@@ -67,7 +67,7 @@ Each repo reports size before/after, loose→packed object counts, pruned remote
 Tracked files listed in `.gitignore` are usually a mistake. `-u` untracks them with `git rm --cached`: file kept on disk, changes staged, not committed. Submodule gitlinks are skipped. `-n` reports them without untracking.
 
 ```sh
-git-maintenance                 # optimize all repos under /home/bubba/Projects
+git-maintenance                 # optimize all repos under ~/Projects
 git-maintenance /some/dir       # optimize repos under a specific directory
 git-maintenance -b /some/dir    # same, via flag
 git-maintenance -u              # also untrack reported tracked+ignored files
@@ -121,11 +121,13 @@ Point the LACT Gaming profile hooks at this script:
 
 ```yaml
 hooks:
-  activated: /home/bubba/Projects/_scripts/src/lact-gaming.sh on
-  deactivated: /home/bubba/Projects/_scripts/src/lact-gaming.sh off
+  activated: ~/Projects/_scripts/src/lact-gaming.sh on
+  deactivated: ~/Projects/_scripts/src/lact-gaming.sh off
 ```
 
 Requires `kscreen-doctor`, `loginctl`, `runuser` and `setsid` (util-Linux), plus `pgrep`/`pkill` (procps-ng) and `awk`.
+
+The action runs against the logged-in session owner. It defaults to `SUDO_USER`, then the user of the first non-root `loginctl` session, then the current user; set `SESSION_USER` in the hook environment to pin it.
 
 ---
 

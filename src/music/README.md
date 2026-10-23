@@ -3,10 +3,10 @@
 Caps a FLAC library at 16-bit / 48 kHz, keeping each file's rate family, and rewrites files with a non-standard ID3v2 tag in front of the FLAC stream. Sources are never modified; output goes to a separate tree. Built for `/mnt/data/Music`.
 
 ```sh
-/home/bubba/Projects/_scripts/src/music/flac-conversion.py scan                 # report mix, write job list
-/home/bubba/Projects/_scripts/src/music/flac-conversion.py convert              # transcode into the target tree
-/home/bubba/Projects/_scripts/src/music/flac-conversion.py verify               # decode and compare outputs against sources
-/home/bubba/Projects/_scripts/src/music/flac-conversion.py move                 # replace sources with verified outputs
+~/Projects/_scripts/src/music/flac-conversion.py scan                 # report mix, write job list
+~/Projects/_scripts/src/music/flac-conversion.py convert              # transcode into the target tree
+~/Projects/_scripts/src/music/flac-conversion.py verify               # decode and compare outputs against sources
+~/Projects/_scripts/src/music/flac-conversion.py move                 # replace sources with verified outputs
 ```
 
 Add `--dry-run` to `convert` and `move` to print only. Defaults: `--source /mnt/data/Music`, `--target /mnt/data/Music-48k`, `--job-list /tmp/opencode/flac-conversion-jobs.tsv`, `--jobs 8`.

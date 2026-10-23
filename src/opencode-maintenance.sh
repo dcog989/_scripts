@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # opencode-maintenance.sh - periodic maintenance for OpenCode
 #
-# `DRY_RUN=1 bash /home/bubba/Projects/_scripts/src/opencode-maintenance.sh`
-# `bash /home/bubba/Projects/_scripts/src/opencode-maintenance.sh`
+# `DRY_RUN=1 bash ~/Projects/_scripts/src/opencode-maintenance.sh`
+# `bash ~/Projects/_scripts/src/opencode-maintenance.sh`
 #
 #  1. Prune OpenCode SQLite rows whose project directory no longer exists
 #     (prevents "Failed to send prompt / Unable to retrieve session").

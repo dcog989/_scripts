@@ -11,7 +11,7 @@
 # touched.
 #
 # Usage:
-#   git-maintenance                 # optimize all repos under /home/bubba/Projects
+#   git-maintenance                 # optimize all repos under ~/Projects
 #   git-maintenance /some/dir       # optimize repos under a specific directory
 #   git-maintenance -b /some/dir    # same, via flag
 #   git-maintenance -u              # also untrack reported tracked+ignored files
@@ -45,7 +45,7 @@ end
 function git-maintenance --description 'Safely optimize all git repos under a directory'
     argparse n/dry-run u/untrack 'b/base=' a/aggressive e/estimate -- $argv; or return 2
 
-    set -l base /home/bubba/Projects
+    set -l base $HOME/Projects
     test -n "$_flag_base"; and set base "$_flag_base"
     test (count $argv) -gt 0; and set base "$argv[1]"
     set -l dry_run $_flag_dry_run

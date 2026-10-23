@@ -23,7 +23,9 @@
 set -euo pipefail
 
 # Configuration
-SESSION_USER="${SESSION_USER:-bubba}"
+# LACT runs the hook as root, so derive the session owner: override, sudo caller, else the logged-in user.
+SESSION_USER="${SESSION_USER:-${SUDO_USER:-$(loginctl --no-legend list-sessions 2>/dev/null | awk '$3 != "root" { print $3; exit }' || true)}}"
+SESSION_USER="${SESSION_USER:-$(id -un)}"
 OUTPUT="DP-1"
 MODE_GAME="3840x2160@240"
 MODE_IDLE="3840x2160@120"
