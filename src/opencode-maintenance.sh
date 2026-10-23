@@ -78,6 +78,9 @@ rotate_log() {
 }
 
 exec > >(tee -a "$MAINT_LOG") 2>&1
+# process substitution is not waited for: close the pipe so tee flushes the last
+# lines into the transcript before the script (or a systemd scope) goes away
+trap 'exec 1>&- 2>&-; wait' EXIT
 log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*"; }
 
 # This transcript only grows a line or two per run, but it is still unbounded;
