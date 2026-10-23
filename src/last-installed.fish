@@ -3,8 +3,8 @@ function last-installed --description 'Colourised tail of pacman transactions wi
     if test (count $argv) -gt 0
         set count $argv[1]
     end
-    if not string match -qr '^[0-9]+$' -- $count
-        echo "usage: last-installed [COUNT]" >&2
+    if not string match -qr '^[1-9][0-9]*$' -- $count
+        echo "usage: last-installed [COUNT] (COUNT >= 1)" >&2
         return 2
     end
 
@@ -98,5 +98,7 @@ function last-installed --description 'Colourised tail of pacman transactions wi
         for (i = start; i < cnt; i++) print buf[i % count]
     }
     ' $log
+    set -l rc $status
     test -n "$repo_file"; and rm -f $repo_file
+    return $rc
 end
