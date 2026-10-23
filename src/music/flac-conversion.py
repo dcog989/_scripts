@@ -46,6 +46,9 @@ ID3V2_HEADER_SIZE = 10
 ID3V1_TAG_SIZE = 128
 LENGTH_TOLERANCE_SAMPLES = 1
 CLIP_PEAK_DB = 0.0
+# a resample and dither must leave the peak level alone; 1 dB is measurement slack
+LEVEL_TOLERANCE_DB = 1.0
+HASH_CHUNK_BYTES = 1 << 20
 CONTAINER_MAGIC = (
     (b"OggS", "Ogg container (Vorbis, Opus or FLAC-in-Ogg)"),
     (b"RIFF", "RIFF container (WAV)"),
@@ -150,7 +153,7 @@ def describe_file(path: Path) -> str:
             return name
     if head[4:8] == b"ftyp":
         return "MP4 container (AAC or ALAC)"
-    if head[:1] == b"\xff" and head[1] & 0xE0 == 0xE0:
+    if len(head) > 1 and head[:1] == b"\xff" and head[1] & 0xE0 == 0xE0:
         return "MPEG audio"
     printable = all(32 <= byte < 127 for byte in head[:4])
     return (
@@ -249,6 +252,9 @@ def source_tags(path: Path) -> list[tuple[str, str]]:
     not have, and its names are translated back to Vorbis spellings.
     """
     tags = vorbis_tags(path)
+    if not id3v2_length(read_head(path, ID3V2_HEADER_SIZE)):
+        # ffprobe only adds tags that a non-standard ID3v2 tag carries
+        return tags
     seen = {key.upper() for key, _ in tags}
     for key, value in probe_tags(path):
         name = CANONICAL_KEYS.get(key.lower(), key.upper())
@@ -435,6 +441,11 @@ def drop_id3v1(path: Path) -> None:
             handle.truncate(end - ID3V1_TAG_SIZE)
 
 
+def expected_samples(entry: Entry) -> int:
+    """Output sample count implied by the rate change."""
+    return round(entry.current.samples * entry.rate / entry.current.rate)
+
+
 def is_converted(target: Path, entry: Entry) -> bool:
     if not target.exists():
         return False
@@ -442,7 +453,14 @@ def is_converted(target: Path, entry: Entry) -> bool:
         info = read_streaminfo(target)
     except (OSError, ValueError):
         return False
-    return info.rate == entry.rate and info.bits == entry.bits
+    if (info.rate, info.bits, info.channels) != (
+        entry.rate,
+        entry.bits,
+        entry.current.channels,
+    ):
+        return False
+    # a target built from a different source version is stale, not converted
+    return not entry.current.samples or info.samples == expected_samples(entry)
 
 
 def convert_one(entry: Entry, target_root: Path, dry_run: bool) -> str:
@@ -537,19 +555,22 @@ def peak_level(path: Path) -> float | None:
 def decoded_pcm_hash(path: Path) -> str | None:
     """MD5 of the audio decoded to raw 16-bit little-endian; None when empty."""
     # fmt: off
-    result = subprocess.run(
-        [
-            "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
-            "-i", str(path),
-            "-map", "0:a", "-f", "s16le", "-acodec", "pcm_s16le", "-",
-        ],
-        capture_output=True,
-        check=False,
-    )
+    command = [
+        "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error",
+        "-i", str(path),
+        "-map", "0:a", "-f", "s16le", "-acodec", "pcm_s16le", "-",
+    ]
     # fmt: on
-    if not result.stdout:
-        return None
-    return hashlib.md5(result.stdout).hexdigest()
+    digest = hashlib.md5()
+    seen = False
+    # streamed, so a long track is never held in memory whole
+    with subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
+    ) as proc:
+        for chunk in iter(lambda: proc.stdout.read(HASH_CHUNK_BYTES), b""):
+            digest.update(chunk)
+            seen = True
+    return digest.hexdigest() if seen else None
 
 
 def decode_failure(path: Path) -> str | None:
@@ -593,15 +614,14 @@ def check_output(entry: Entry, target_root: Path) -> tuple[list[str], list[str]]
             f"wrong format: {target} is {info.rate} Hz/{info.bits} bit/{info.channels} ch, "
             f"expected {entry.rate} Hz/{entry.bits} bit/{entry.current.channels} ch"
         )
-    ratio = entry.rate / entry.current.rate
-    expected_samples = round(entry.current.samples * ratio)
+    expected = expected_samples(entry)
     if (
         entry.current.samples
-        and abs(info.samples - expected_samples) > LENGTH_TOLERANCE_SAMPLES
+        and abs(info.samples - expected) > LENGTH_TOLERANCE_SAMPLES
     ):
         problems.append(
             f"wrong length: {target} has {info.samples} samples, expected "
-            f"{expected_samples} from {entry.current.samples} at "
+            f"{expected} from {entry.current.samples} at "
             f"{entry.current.rate} Hz"
         )
     source_pictures, _ = read_metadata(entry.source)
@@ -622,11 +642,21 @@ def check_output(entry: Entry, target_root: Path) -> tuple[list[str], list[str]]
             detail.append(f"has extra {extra}")
         problems.append(f"tags differ: {target} {', '.join(detail)}")
     if entry.rate != entry.current.rate or entry.bits != entry.current.bits:
-        peak = peak_level(target)
-        if peak is not None and peak >= CLIP_PEAK_DB:
+        # a resample must not move the level: a silent or attenuated output means
+        # the transcode failed even though the format looks right
+        source_peak = peak_level(entry.source)
+        target_peak = peak_level(target)
+        if source_peak is None or target_peak is None:
+            problems.append(f"could not measure level: {target}")
+        elif abs(source_peak - target_peak) > LEVEL_TOLERANCE_DB:
+            problems.append(
+                f"level changed: {target} peaks at {target_peak:g} dB, "
+                f"source at {source_peak:g} dB"
+            )
+        if target_peak is not None and target_peak >= CLIP_PEAK_DB:
             warnings.append(
                 f"possible clipping: {target} has samples at full scale "
-                f"({abs(peak):g} dB)"
+                f"({abs(target_peak):g} dB)"
             )
     else:
         # only the ID3v2 wrapper changed, so the audio must decode identically
@@ -640,16 +670,19 @@ def check_output(entry: Entry, target_root: Path) -> tuple[list[str], list[str]]
 
 def verify(
     entries: list[Entry], target_root: Path, jobs: int
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], int]:
     problems: list[str] = []
     warnings: list[str] = []
+    failing = 0
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         results = pool.map(lambda entry: check_output(entry, target_root), entries)
         for done, (entry_problems, entry_warnings) in enumerate(results, start=1):
             report_progress(done, len(entries), "verifying")
             problems.extend(entry_problems)
             warnings.extend(entry_warnings)
-    return problems, warnings
+            if entry_problems:
+                failing += 1
+    return problems, warnings, failing
 
 
 def move_one(entry: Entry, target_root: Path, dry_run: bool) -> tuple[str, list[str]]:
@@ -888,12 +921,12 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n{summarise_move(counts, len(entries))}")
         return 1 if counts["unverified"] or counts["missing source"] else 0
 
-    problems, warnings = verify(entries, target, args.jobs)
+    problems, warnings, failing = verify(entries, target, args.jobs)
     for warning in warnings:
         print(warning, file=sys.stderr)
     for problem in problems:
         print(problem, file=sys.stderr)
-    print(f"\n{len(entries) - len(problems)}/{len(entries)} outputs match their source")
+    print(f"\n{len(entries) - failing}/{len(entries)} outputs match their source")
     report_size(entries, target)
     return 1 if problems else 0
 
