@@ -88,9 +88,12 @@ function repository-clean --description 'List then clean pacman/AUR package left
     echo
     echo $sec"== Removing orphans =="$off
     if test -n "$orphans"
-        sudo pacman -Rns --noconfirm $orphans
-        set n_orphans (count $orphans)
-        echo "  "$ok"removed $n_orphans orphaned package(s)"$off
+        if sudo pacman -Rns --noconfirm $orphans
+            set n_orphans (count $orphans)
+            echo "  "$ok"removed $n_orphans orphaned package(s)"$off
+        else
+            echo "  "$bad"removal failed - see the pacman output above"$off
+        end
     else
         echo "  "$dim"none"$off
     end
@@ -150,27 +153,41 @@ function repository-clean --description 'List then clean pacman/AUR package left
     end
 
     if test -n "$aur"
-        echo $sec"== Cleaning AUR build cache (~/.cache/$aur) =="$off
-        # Delete directly, not via `$aur -Sc`: that also runs `pacman -Sc`,
-        # which keeps only the latest cached version and undoes the keep-3 prune.
-        set -l aur_files_before (count (find ~/.cache/$aur -type f 2>/dev/null))
-        rm -rf ~/.cache/$aur/* 2>/dev/null
-        set -l aur_files_after (count (find ~/.cache/$aur -type f 2>/dev/null))
-        set n_aur_files (math $aur_files_before - $aur_files_after)
-
-        echo $sec"== Removing unneeded deps =="$off
-        set -l before (count (pacman -Qdtq 2>/dev/null))
-        switch $aur
-            case yay
-                yay -Yc --noconfirm
-            case paru
-                paru -c --noconfirm
+        # A build owns part of this cache and may still need its deps: leave both alone.
+        set -l aur_busy 0
+        for tool in yay paru makepkg
+            pgrep -x $tool >/dev/null; and set aur_busy 1
         end
-        set n_aur_deps (math $before - (count (pacman -Qdtq 2>/dev/null)))
-        if test $n_aur_deps -gt 0
-            echo "  "$ok"removed $n_aur_deps unneeded dep(s)"$off
+        if test $aur_busy = 1
+            echo $sec"== AUR cleanup =="$off
+            echo "  "$bad"skipped: a yay/paru/makepkg build is running"$off
         else
-            echo "  "$dim"nothing to remove"$off
+            echo $sec"== Cleaning AUR build cache (~/.cache/$aur) =="$off
+            # Delete directly, not via `$aur -Sc`: that also runs `pacman -Sc`,
+            # which keeps only the latest cached version and undoes the keep-3 prune.
+            set -l aur_files_before (count (find ~/.cache/$aur -type f 2>/dev/null))
+            if test $aur_files_before -eq 0
+                echo "  "$dim"nothing to clean"$off
+            else if rm -rf ~/.cache/$aur/* 2>/dev/null
+                set n_aur_files (math $aur_files_before - (count (find ~/.cache/$aur -type f 2>/dev/null)))
+            else
+                echo "  "$bad"cache clean failed"$off
+            end
+
+            echo $sec"== Removing unneeded deps =="$off
+            set -l before (count (pacman -Qdtq 2>/dev/null))
+            switch $aur
+                case yay
+                    yay -Yc --noconfirm
+                case paru
+                    paru -c --noconfirm
+            end
+            set n_aur_deps (math $before - (count (pacman -Qdtq 2>/dev/null)))
+            if test $n_aur_deps -gt 0
+                echo "  "$ok"removed $n_aur_deps unneeded dep(s)"$off
+            else
+                echo "  "$dim"nothing to remove"$off
+            end
         end
     else
         echo $dim"No AUR helper (yay/paru) found - skipping AUR cleanup"$off

@@ -46,7 +46,7 @@ Cleans:
 - **Orphans** — packages installed as dependencies that are no longer required (`pacman -Qdtq`).
 - **Package cache** — prunes `/var/cache/pacman/pkg` with `paccache -k 3`, then drops every cached version of an uninstalled package. The report previews what both steps reclaim.
 - **Stale download dirs** — removes the `download-XXXXXX` temp dirs libalpm leaks after an interrupted download. `pacman -Sc` fails with `Error reading fd 8` while they are there. Skipped while pacman runs.
-- **AUR build cache** — cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present.
+- **AUR build cache** — cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present. Both AUR steps are skipped while `yay`, `paru` or `makepkg` runs.
 - **Unneeded AUR deps** — removes orphaned AUR dependencies via `yay -Yc` / `paru -c`.
 
 The closing summary counts what each step removed (packages, cache files, stale dirs) and how much space the caches gave back.
