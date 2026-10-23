@@ -61,7 +61,7 @@ repository-clean
 
 ## git-maintenance
 
-Safe git maintenance for every repository under a directory tree. Never touches the working tree: no `git clean`, no reflog expiry, no `--prune=now`, and never deletes branches, tags, stashes or remotes.
+Safe git maintenance for every repository under a directory tree. Never touches the working tree: no `git clean`, no reflog expiry (pinned to `never`), no `--prune=now` except under `-a`, and never deletes branches, tags, stashes or remotes.
 
 Each repo reports size before/after, loose→packed object counts, pruned remote refs and the `fsck` result. The summary totals repos optimized/skipped (scanned/skipped in dry-run), space reclaimed and refs pruned, then lists every tracked+ignored file (as `repo/path`) and any repo with `fsck` errors.
 

@@ -1,7 +1,8 @@
 # Safe git maintenance for every repo under a directory tree.
 #
-# It never touches the working tree, uses no `git clean`, no reflog expiry, no
-# `--prune=now`, and never deletes branches, tags, stashes or remotes.
+# It never touches the working tree, uses no `git clean`, never expires reflogs
+# (reflogExpire/reflogExpireUnreachable are pinned to never), and never deletes
+# branches, tags, stashes or remotes. Only `-a` passes `--prune=now`.
 #
 # Files that are both tracked and ignored (a tracked file listed in .gitignore is
 # usually a mistake) are always reported, but only untracked when -u is passed.
@@ -66,6 +67,9 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         echo "$red!$off aggressive mode: adding --aggressive --prune=now (much slower, no recovery grace)$off"
     end
 
+    # `git gc` runs `git reflog expire --all` at git's default ages (90/30 days);
+    # pin both to never so old recovery points stay reachable, as promised.
+    set -l keep_reflog -c gc.reflogExpire=never -c gc.reflogExpireUnreachable=never
     set -l gc_flags --quiet
     if test -n "$aggressive"
         set -a gc_flags --aggressive --prune=now
@@ -195,7 +199,7 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         end
         set pruned_total (math $pruned_total + $pruned)
         git -C "$repo" worktree prune >/dev/null 2>&1
-        git -C "$repo" gc $gc_flags
+        git -C "$repo" $keep_reflog gc $gc_flags
         git -C "$repo" commit-graph write --reachable >/dev/null 2>&1
         if test "$has_midx" = true
             git -C "$repo" repack --write-midx=incremental --quiet >/dev/null 2>&1
