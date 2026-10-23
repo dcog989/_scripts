@@ -161,7 +161,8 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         set -l packs (string match -r '^packs: [0-9]+' -- $raw | string replace -r '^packs: ' '')
         set -l loose_kb (string match -r '^size: [0-9]+' -- $raw | string replace -r '^size: ' '')
         test -n "$loose_kb"; or set loose_kb 0
-        set -l before_kb (du -sk "$gitdir_abs" 2>/dev/null | cut -f1)
+        # Size the shared object store: a linked worktree's own git dir is nearly empty.
+        set -l before_kb (du -sk "$common" 2>/dev/null | cut -f1)
         test -n "$before_kb"; or set before_kb 0
         set -l remotes (git -C "$repo" remote)
 
@@ -220,7 +221,7 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         set -l raw2 (git -C "$repo" count-objects -v 2>/dev/null)
         set -l loose2 (string match -r '^count: [0-9]+' -- $raw2 | string replace -r '^count: ' '')
         set -l packs2 (string match -r '^packs: [0-9]+' -- $raw2 | string replace -r '^packs: ' '')
-        set -l after_kb (du -sk "$gitdir_abs" 2>/dev/null | cut -f1)
+        set -l after_kb (du -sk "$common" 2>/dev/null | cut -f1)
         test -n "$after_kb"; or set after_kb 0
 
         set -l delta (math "$before_kb - $after_kb")
