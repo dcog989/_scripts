@@ -17,17 +17,17 @@
 #   git-maintenance -u              # also untrack reported tracked+ignored files
 #   git-maintenance -n              # dry run: report stats, change nothing
 #   git-maintenance --dry-run       # same as -n
+#   git-maintenance -n -e           # dry run plus the reclaim estimate (slow)
 #   git-maintenance -a              # aggressive: adds --aggressive --prune=now
 #                                   # (much slower; drops the recovery grace period)
 #
 # Each repo reports: size before -> after (reclaimed), loose -> packed object
 # counts, stale remote refs pruned, and the fsck result. The summary totals
 # repos optimized/skipped, space reclaimed and remote refs pruned, then lists
-# every tracked+ignored file (as repo/path) and any repo with fsck errors. In
-# dry-run it instead totals the projected reclaim: current object data minus a
-# read-only simulated repack, which accounts for loose objects, pack rebuilding
-# and pruning. The simulation compresses every object, so it costs about as much
-# as a real repack, and the summary counts repos scanned rather than optimized.
+# every tracked+ignored file (as repo/path) and any repo with fsck errors. A dry
+# run reports current sizes only and counts repos scanned; -e adds the projected
+# reclaim, computed by compressing every object read-only, which costs about as
+# much as a real repack.
 
 function __gm_human --description 'format a KiB value as human-readable'
     set -l kb $argv[1]
@@ -43,7 +43,7 @@ function __gm_human --description 'format a KiB value as human-readable'
 end
 
 function git-maintenance --description 'Safely optimize all git repos under a directory'
-    argparse n/dry-run u/untrack 'b/base=' a/aggressive -- $argv; or return 2
+    argparse n/dry-run u/untrack 'b/base=' a/aggressive e/estimate -- $argv; or return 2
 
     set -l base /home/bubba/Projects
     test -n "$_flag_base"; and set base "$_flag_base"
@@ -51,6 +51,7 @@ function git-maintenance --description 'Safely optimize all git repos under a di
     set -l dry_run $_flag_dry_run
     set -l aggressive $_flag_aggressive
     set -l untrack $_flag_untrack
+    set -l estimate $_flag_estimate
 
     if not test -d "$base"
         echo "git-maintenance: not a directory: $base" >&2
@@ -167,27 +168,31 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         set -l remotes (git -C "$repo" remote)
 
         if test -n "$dry_run"
-            # Reclaim estimate = current object storage (loose + packs) minus the
-            # pack git would rebuild (read-only). Existing cruft packs are kept by
-            # gc, so add their bytes back.
-            set -l packdir (git -C "$repo" rev-parse --path-format=absolute --git-path objects/pack 2>/dev/null)
-            set -l cur_b 0
-            set -l cruft_b 0
-            for pf in "$packdir"/*.pack
-                test -e "$pf"; or continue
-                set -l psz (stat -c%s "$pf" 2>/dev/null)
-                test -n "$psz"; or set psz 0
-                set cur_b (math "$cur_b + $psz")
-                set -l mt (string replace -r '\.pack$' '.mtimes' "$pf")
-                test -e "$mt"; and set cruft_b (math "$cruft_b + $psz")
+            set -l est_part
+            if test -n "$estimate"
+                # Reclaim estimate = current object storage (loose + packs) minus the
+                # pack git would rebuild (read-only). Existing cruft packs are kept by
+                # gc, so add their bytes back.
+                set -l packdir (git -C "$repo" rev-parse --path-format=absolute --git-path objects/pack 2>/dev/null)
+                set -l cur_b 0
+                set -l cruft_b 0
+                for pf in "$packdir"/*.pack
+                    test -e "$pf"; or continue
+                    set -l psz (stat -c%s "$pf" 2>/dev/null)
+                    test -n "$psz"; or set psz 0
+                    set cur_b (math "$cur_b + $psz")
+                    set -l mt (string replace -r '\.pack$' '.mtimes' "$pf")
+                    test -e "$mt"; and set cruft_b (math "$cruft_b + $psz")
+                end
+                set -l newb (git -C "$repo" pack-objects --all --reflog --indexed-objects --stdout 2>/dev/null | wc -c)
+                test -n "$newb"; or set newb 0
+                set -l est_b (math "$loose_kb * 1024 + $cur_b - $newb - $cruft_b")
+                test "$est_b" -lt 0; and set est_b 0
+                set -l est_kb (math "floor($est_b / 1024)")
+                set reclaimable_kb (math "$reclaimable_kb + $est_kb")
+                set est_part "  est.reclaim: "(__gm_human $est_kb)
             end
-            set -l newb (git -C "$repo" pack-objects --all --reflog --indexed-objects --stdout 2>/dev/null | wc -c)
-            test -n "$newb"; or set newb 0
-            set -l est_b (math "$loose_kb * 1024 + $cur_b - $newb - $cruft_b")
-            test "$est_b" -lt 0; and set est_b 0
-            set -l est_kb (math "floor($est_b / 1024)")
-            set reclaimable_kb (math "$reclaimable_kb + $est_kb")
-            echo "$dim    $name  est.reclaim: "(__gm_human $est_kb)"  loose:$loose/"(__gm_human $loose_kb)" packs:$packs remotes:"(count $remotes)" .git:"(__gm_human $before_kb)$off
+            echo "$dim    $name$est_part  loose:$loose/"(__gm_human $loose_kb)" packs:$packs remotes:"(count $remotes)" .git:"(__gm_human $before_kb)$off
             set optimized (math $optimized + 1)
             continue
         end
@@ -235,8 +240,9 @@ function git-maintenance --description 'Safely optimize all git repos under a di
     set -l tail "reclaimed: "(__gm_human $reclaimed_kb)
     set -l counted optimized
     if test -n "$dry_run"
-        set tail "reclaimable (est.): "(__gm_human $reclaimable_kb)
         set counted scanned
+        set tail "dry run: nothing changed"
+        test -n "$estimate"; and set tail "reclaimable (est.): "(__gm_human $reclaimable_kb)
     end
     echo
     echo $green"$counted: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail

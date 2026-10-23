@@ -63,7 +63,7 @@ repository-clean
 
 Safe git maintenance for every repository under a directory tree. Never touches the working tree: no `git clean`, no reflog expiry (pinned to `never`), no `--prune=now` except under `-a`, and never deletes branches, tags, stashes or remotes.
 
-Each repo reports size before/after, loose→packed object counts, pruned remote refs and the `fsck` result. The summary totals repos optimized/skipped (scanned/skipped in dry-run), space reclaimed and refs pruned, then lists every tracked+ignored file (as `repo/path`) and any repo with `fsck` errors.
+Each repo reports size before/after, loose→packed object counts, pruned remote refs and the `fsck` result. The summary totals repos optimized/skipped (scanned/skipped in dry-run), space reclaimed and refs pruned, then lists every tracked+ignored file (as `repo/path`) and any repo with `fsck` errors. A dry run reports current sizes only; add `-e` to also estimate the reclaim from a read-only simulated repack, which costs about as much as the real run.
 
 Tracked files listed in `.gitignore` are usually a mistake. `-u` untracks them with `git rm --cached`: file kept on disk, changes staged, not committed. Submodule gitlinks are skipped. `-n` reports them without untracking.
 
@@ -73,6 +73,7 @@ git-maintenance /some/dir       # optimize repos under a specific directory
 git-maintenance -b /some/dir    # same, via flag
 git-maintenance -u              # also untrack reported tracked+ignored files
 git-maintenance -n              # dry run: report stats, change nothing
+git-maintenance -n -e           # dry run plus the reclaim estimate (slow)
 git-maintenance -a              # aggressive: --aggressive --prune=now (much slower)
 ```
 
