@@ -251,6 +251,6 @@ Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and 
 ./src/health-check.sh --no-sudo    # skip privileged checks (no effect as root)
 ```
 
-Suppressed patterns are extended regexes: built-in defaults plus any lines in `~/.config/health-check/ignore` (override with `HEALTH_CHECK_IGNORE`). Use `-v` to see unfiltered output before adding a pattern.
+Suppressed patterns are extended regexes: built-in defaults plus any lines in `~/.config/health-check/ignore` (override with `HEALTH_CHECK_IGNORE`). Use `-v` to see unfiltered output before adding a pattern. An invalid regex aborts the run with exit 2 and names the offending line, instead of filtering every finding away.
 
 Requires `systemctl`, `journalctl`, `pacman`. Optional: `paccheck` (pacutils), `btrfs-progs`, `smartmontools`. Btrfs mounts and block devices are auto-detected; override with `BTRFS_MOUNTS` / `SMART_DEVICES`. `MAX_LINES` (default 25) caps lines shown per findings list.

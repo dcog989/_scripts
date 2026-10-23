@@ -10,7 +10,7 @@
 # stats + scrub, and disk SMART health. Privileged checks use sudo when
 # available and are skipped otherwise.
 #
-# Exit: 0 no issues, 1 issues found, 2 usage error.
+# Exit: 0 no issues, 1 issues found, 2 usage error or bad ignore pattern.
 set -uo pipefail
 
 MAX_LINES="${MAX_LINES:-25}"
@@ -108,17 +108,25 @@ purge() {
 }
 
 build_ignore_re() {
-  local pats=("${DEFAULT_IGNORE[@]}") line
+  local pats=("${DEFAULT_IGNORE[@]}") line n=0
   if [ -f "$IGNORE_FILE" ]; then
     while IFS= read -r line; do
+      n=$((n + 1))
       line="${line%%#*}"
-      [ -n "${line//[[:space:]]/}" ] && pats+=("$line")
+      [ -n "${line//[[:space:]]/}" ] || continue
+      # a bad regex breaks the whole filter, which would hide every finding
+      printf '' | grep -Eq -- "$line" 2>/dev/null
+      if [ $? -gt 1 ]; then
+        printf 'health-check: %s:%d: invalid regex: %s\n' "$IGNORE_FILE" "$n" "$line" >&2
+        return 2
+      fi
+      pats+=("$line")
     done < "$IGNORE_FILE"
   fi
   local IFS='|'
   printf '%s' "${pats[*]}"
 }
-IGNORE_RE="$(build_ignore_re)"
+IGNORE_RE="$(build_ignore_re)" || exit 2
 
 # --- privilege handling -----------------------------------------------------
 SUDO=""
