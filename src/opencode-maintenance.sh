@@ -167,6 +167,11 @@ table_exists() {
   [ "$(sqlite3 "$DB" "SELECT count(*) FROM pragma_table_info('$1');")" -gt 0 ]
 }
 
+# column_exists <table> <column> - false when either is absent
+column_exists() {
+  [ "$(sqlite3 "$DB" "SELECT count(*) FROM pragma_table_info('$1') WHERE name='$2';")" -gt 0 ]
+}
+
 # ------------------------------------------------------------------- choices
 if [ -t 0 ] && [ "$DRY_RUN" != "1" ]; then
   if oc_running; then log "warning: OpenCode is running - DB backup, prune and VACUUM will be skipped"; fi
@@ -278,16 +283,19 @@ con = sqlite3.connect(db)
 con.execute("PRAGMA foreign_keys=ON")
 con.execute("BEGIN")
 have = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+def cols(t): return {r[1] for r in con.execute(f"PRAGMA table_info('{t}')")}
+def has(t, *names):
+    return t in have and all(n in cols(t) for n in names)
 def count(t): return con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
 counted = [t for t in ("session_v2", "session_message", "message", "part") if t in have]
 before = {t: count(t) for t in counted}
 def run(s): return con.execute(s, paths).rowcount
 deleted = {}
 for t in ("session", "session_v2", "project_directory", "worktree"):
-    if t in have:
+    if has(t, "directory"):
         deleted[t] = run(f"DELETE FROM {t} WHERE directory IN ({q})")
-sessions = [t for t in ("session", "session_v2") if t in have]
-if "project" in have and sessions:
+sessions = [t for t in ("session", "session_v2") if has(t, "project_id")]
+if has("project", "worktree", "id") and sessions:
     keep = " UNION ".join(f"SELECT DISTINCT project_id FROM {t}" for t in sessions)
     deleted["project"] = run(f"DELETE FROM project WHERE worktree IN ({q}) AND id NOT IN ({keep})")
 after = {t: count(t) for t in counted}
@@ -339,7 +347,7 @@ fi
 # ------------------------------------------------------------- age-based prune
 # Sessions are pruned by last activity (time_updated, epoch ms). Deleting a
 # session row cascades to messages, parts, todos, etc. (requires foreign_keys).
-if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && table_exists session_v2; then
+if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && column_exists session_v2 time_updated; then
   age_days="$SESSION_MAX_AGE_DAYS"
   now=$(date +%s)
   cutoff_ms=$(( (now - age_days * 86400) * 1000 ))
@@ -368,12 +376,13 @@ con = sqlite3.connect(db)
 con.execute("PRAGMA foreign_keys=ON")
 con.execute("BEGIN")
 have = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+def cols(t): return {r[1] for r in con.execute(f"PRAGMA table_info('{t}')")}
 counted = [t for t in ("session_v2", "session", "session_message", "message", "part") if t in have]
 def count(t): return con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
 before = {t: count(t) for t in counted}
 deleted = {}
 for t in ("session_v2", "session"):
-    if t in have:
+    if t in have and "time_updated" in cols(t):
         deleted[t] = con.execute(f"DELETE FROM {t} WHERE time_updated <= ?", (cutoff,)).rowcount
 con.commit()
 after = {t: count(t) for t in counted}
