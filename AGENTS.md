@@ -22,7 +22,6 @@ Scripts live in `src/`, with music tooling in `src/music/`:
 - `src/health-check.sh` — read-only report of system-wide issues (units, packages, logs, Btrfs, SMART).
 - `src/music/flac-conversion.py` — scan a FLAC tree, transcode anything above 16-bit/48 kHz into a separate tree, verify the outputs.
 - `src/music/artists-with-flac.sh` — list Music artists that contain at least one FLAC.
-- `src/music/music-48k-move.sh` — replace library files with their converted 48 kHz copies (dry run by default, `--apply` to move).
 - `src/music/README.md` — flac-conversion workflow, defaults and caveats.
 - `README.md` — usage and overview.
 

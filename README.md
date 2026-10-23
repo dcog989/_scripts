@@ -15,7 +15,6 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 | [`src/long-files.fish`](#long-files)                    | fish function | List text files by line length, grouped by directory. |
 | [`src/music/artists-with-flac.sh`](#music)              | shell script  | List artists under `/mnt/data/Music` that contain FLAC files. |
 | [`src/music/flac-conversion.py`](#music)                | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
-| [`src/music/music-48k-move.sh`](#music)                 | shell script  | Replace library files with their converted 48 kHz counterparts (dry run by default). |
 | [`src/old-files.fish`](#old-files)                      | fish function | List files older than a number of days. Use `-d` for directories. |
 | [`src/opencode-maintenance.sh`](#opencode-maintenance)  | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
 | [`src/repository-clean.fish`](#repository-clean)        | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
@@ -201,19 +200,14 @@ long-files /some/dir 800  # both
 
 ## music
 
-FLAC library tooling under `src/music/`. `flac-conversion.py` caps a library at 16-bit / 48 kHz into a separate tree; see `src/music/README.md` for its `scan` / `convert` / `verify` / `move` workflow, defaults and caveats.
+FLAC library tooling under `src/music/`. `flac-conversion.py` caps a library at 16-bit / 48 kHz into a separate tree; see `src/music/README.md` for its `scan` / `convert` / `verify` / `move` workflow, defaults and caveats. Its `move` mode is the only supported way to replace library files: it verifies each output before replacing it.
 
-`artists-with-flac.sh` prints each artist directory under `/mnt/data/Music` holding at least one FLAC.
-
-`music-48k-move.sh` replaces library files with the converted copies from `/mnt/data/Music-48k`, matching by relative path only. Dry run by default; `--apply` moves. It also reports per-directory files present on only one side.
+`artists-with-flac.sh` prints each artist directory under `/mnt/data/Music` holding at least one FLAC. It hardcodes `/mnt/data/Music`.
 
 ```sh
 ./src/music/artists-with-flac.sh
-./src/music/music-48k-move.sh           # dry run: list what would be replaced
-./src/music/music-48k-move.sh --apply   # replace matching library files
+./src/music/flac-conversion.py move     # replace verified outputs over the library
 ```
-
-Both shell scripts hardcode their paths: `/mnt/data/Music` for both, plus `/mnt/data/Music-48k` for the move script.
 
 ---
 
