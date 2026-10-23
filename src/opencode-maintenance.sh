@@ -255,6 +255,12 @@ while IFS= read -r p; do
 done < "$tmp"
 if [ "$DRY_RUN" = "1" ]; then
   log "DRY RUN - would record $(wc -l < "$newstate") dead paths"
+  # A dry run never writes the state file, so a fresh state has nothing ripe;
+  # list the candidates so the preview still shows what is being tracked.
+  if [ -s "$tmp" ]; then
+    log "DRY RUN - missing paths under ROOTS (grace ${DEAD_GRACE_DAYS}d before any is pruned):"
+    sed 's/^/  /' "$tmp"
+  fi
 else
   mv "$newstate" "$STATE_FILE"
 fi
@@ -267,7 +273,8 @@ else
 fi
 log "dead candidates: $(wc -l < "$tmp"), ripe: $(wc -l < "$ripe") (grace ${DEAD_GRACE_DAYS}d)"
 
-if [ "$skip_db" = 0 ] && [ -s "$ripe" ]; then
+# the dry-run branch only prints, so it may run while OpenCode is open
+if [ -s "$ripe" ] && { [ "$DRY_RUN" = 1 ] || [ "$skip_db" = 0 ]; }; then
   if [ "$DRY_RUN" = "1" ]; then
     log "DRY RUN - would prune paths:"; sed 's/^/  /' "$ripe"
   else
