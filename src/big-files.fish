@@ -31,7 +31,8 @@ function big-files --description 'List files larger than a size threshold'
     # --search-path verbatim).
     set base (path normalize -- $base)
 
-    set -l tab (printf '\t')
+    # SOH as the internal field separator: paths may contain tabs.
+    set -l sep (printf '\001')
     set -l span (math "max($size * 4, 1)")
     set -l bytes (math "round($size * 1048576)")
 
@@ -46,15 +47,16 @@ function big-files --description 'List files larger than a size threshold'
             set -a roots $root
         end
     end
-    set -l root_list (string join "$tab" $roots)
+    set -l root_list (string join "$sep" $roots)
 
     fd -H --no-ignore -t f --size "+$bytes"b --search-path "$base" -x stat -c '%s %n' | awk -v roots="$root_list" -v project="$project" -v base="$base" '
-        BEGIN { n = split(roots, R, "\t"); off = (base == "/" ? 1 : length(base) + 1) }
+        BEGIN { n = split(roots, R, "\001"); off = (base == "/" ? 1 : length(base) + 1) }
         {
             mib = $1 / 1048576
-            $1 = ""
-            sub(/^ +/, "")
+            # strip only the size prefix: rebuilding $0 from fields collapses
+            # runs of spaces inside the path
             path = $0
+            sub(/^[ \t]*[0-9]+[ \t]+/, "", path)
             if (project != "") {
                 best = project
             } else {
@@ -73,8 +75,8 @@ function big-files --description 'List files larger than a size threshold'
                     else { split(rel, parts, "/"); best = parts[1] }
                 }
             }
-            print best "\t" mib "\t" path
-        }' | sort -t "$tab" -k1,1 -k2,2nr | awk -F "$tab" -v limit="$size" -v span="$span" '
+            print best "\001" mib "\001" path
+        }' | sort -t "$sep" -k1,1 -k2,2nr | awk -F "$sep" -v limit="$size" -v span="$span" '
     function paint(c,   t, g) {
         t = (c - limit) / span
         if (t < 0) t = 0
