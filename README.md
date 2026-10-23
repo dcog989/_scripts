@@ -95,7 +95,7 @@ big-files /some/dir 50   # both
 
 ## install-apps
 
-Installs a fixed set of packages: repo apps via `pacman`, AUR apps via `yay` (or `paru` when yay is absent). Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
+Installs a fixed set of packages: repo apps via `pacman`, AUR apps via `yay` (or `paru` when yay is absent). The repo step is a full `pacman -Syu`, so it never partial-upgrades. Edit the `REPO_APPS` / `AUR_APPS` arrays to change the set.
 
 ```sh
 ./src/install-apps.sh

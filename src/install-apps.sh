@@ -41,8 +41,9 @@ if [[ -z "$AUR_HELPER" ]]; then
     exit 1
 fi
 
-echo "Installing Repo apps (CachyOS v3 / Arch)..."
-sudo pacman -S --needed --noconfirm "${REPO_APPS[@]}"
+# Full upgrade with the install: pacman -S alone can partial-upgrade a rolling system.
+echo "Upgrading the system and installing Repo apps (CachyOS v3 / Arch)..."
+sudo pacman -Syu --needed --noconfirm "${REPO_APPS[@]}"
 
 echo "Installing AUR apps via $AUR_HELPER..."
 "$AUR_HELPER" -S --needed --noconfirm "${AUR_APPS[@]}"
