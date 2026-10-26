@@ -1,4 +1,17 @@
-# flac-conversion
+# music
+
+## date-fix
+
+Finds every date tag and keeps only its four-digit year: `2018 2018`, `2018-05-04` and `04/05/2018` all become `2018`, and duplicate values collapse. When a field holds several years (`1980 1990`), the first one wins. Output is one line per album with its track count. Audio is untouched, other tags and the ID3 version are kept. A field with no four-digit year is reported and left as it is. Dry run by default. Defaults: `--source /mnt/data/Music`, `--jobs 8`.
+
+```sh
+~/Projects/_scripts/src/music/date-fix.py          # report
+~/Projects/_scripts/src/music/date-fix.py --fix    # rewrite
+```
+
+Requires `python-mutagen`.
+
+## flac-conversion
 
 Caps a FLAC library at 16-bit / 48 kHz, keeping each file's rate family, and rewrites files with a non-standard ID3v2 tag in front of the FLAC stream. Sources are never modified; output goes to a separate tree. Built for `/mnt/data/Music`.
 

@@ -14,6 +14,7 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 | [`src/last-installed.fish`](#last-installed)            | fish function | List recently installed pacman/AUR apps. |
 | [`src/long-files.fish`](#long-files)                    | fish function | List text files by line length, grouped by directory. |
 | [`src/music/artists-with-flac.sh`](#music)              | shell script  | List artists under `/mnt/data/Music` that contain FLAC files. |
+| [`src/music/date-fix.py`](#music)                       | Python script | Normalize date tags to a four-digit year. |
 | [`src/music/flac-conversion.py`](#music)                | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
 | [`src/old-files.fish`](#old-files)                      | fish function | List files older than a number of days. Use `-d` for directories. |
 | [`src/opencode-maintenance.sh`](#opencode-maintenance)  | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
@@ -203,6 +204,8 @@ long-files /some/dir 800  # both
 ## music
 
 FLAC library tooling under `src/music/`. `flac-conversion.py` caps a library at 16-bit / 48 kHz into a separate tree; see `src/music/README.md` for its `scan` / `convert` / `verify` / `move` workflow, defaults and caveats. Its `move` mode is the only supported way to replace library files: it verifies each output before replacing it.
+
+`date-fix.py` normalizes every date tag to its four-digit year (`2018 2018`, `2018-05-04`, `04/05/2018` → `2018`); a field holding several years keeps the first one. With `--fix` it rewrites the tags; a field with no four-digit year is reported and left alone. Dry run by default; audio is untouched.
 
 `artists-with-flac.sh` prints each artist directory under `/mnt/data/Music` holding at least one FLAC. It hardcodes `/mnt/data/Music`.
 
