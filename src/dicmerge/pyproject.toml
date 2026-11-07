@@ -3,7 +3,7 @@ name = "dicmerge"
 version = "0.7.0"
 description = "Scan, merge, and write back custom user dictionaries from multiple Linux applications"
 requires-python = ">=3.14"
-license.text = "MIT"
+license = "MIT"
 dependencies = [
   "PyYAML>=6.0",
 ]
