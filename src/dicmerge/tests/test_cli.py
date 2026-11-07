@@ -9,6 +9,11 @@ from dicmerge.cli import main
 from dicmerge.exceptions import ConfigError
 
 
+@pytest.fixture(autouse=True)
+def _report_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("dicmerge.report.REPORT_DIR", tmp_path / "reports")
+
+
 def _write_config(tmp_path: Path) -> Path:
     cfg = {
         "output": {"path": str(tmp_path / "out" / "combined.txt"), "sort": False},
@@ -124,6 +129,23 @@ def test_cli_default_previews_then_writes(
     assert "Written:" in out
     assert (tmp_path / "out" / "combined.txt").read_text(encoding="utf-8") == "foo\nbar\n"
     assert (tmp_path / "src" / "default" / "persdict.dat.dicmerge.bak").exists()
+
+
+def test_cli_writes_report(tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    config = _write_config(tmp_path)
+    _source(tmp_path)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+
+    monkeypatch.setattr(sys, "argv", ["dicmerge", "--config", str(config)])
+    main()
+
+    reports = sorted((tmp_path / "reports").glob("dicmerge-*.log"))
+    assert len(reports) == 1
+    text = reports[0].read_text(encoding="utf-8")
+    assert "Scanning:" in text
+    assert "firefox: 2 words" in text
+    assert "Nothing written." in text
+    assert f"Report: {reports[0]}" in capsys.readouterr().out
 
 
 def test_cli_eof_writes_nothing(

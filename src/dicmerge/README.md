@@ -22,6 +22,8 @@ dicmerge --version            # Show version
 
 On first run, `~/.config/dicmerge/config.yaml` is created automatically with default settings.
 
+Each run also writes the report to `~/dicmerge/dicmerge-<timestamp>.log`.
+
 ## Sources
 
 | Source      | Path(s)                                                                                                                                           |
