@@ -37,8 +37,8 @@ function old-files --description 'List files not touched for N days'
 
     find $base -xdev -maxdepth 4 \
         \( -name .git -o -name .cache -o -name .bun -o -name node_modules -o -name target -o -name .venv \) -prune -o \
-        -printf '%y\t%p\t%T@\n' |
-        awk -F'\t' -v cutoff="$cutoff" -v now="$now" -v root="$base" -v dirs="$dir_mode" \
+        -printf '%y\001%p\001%T@\n' |
+        awk -F'\001' -v cutoff="$cutoff" -v now="$now" -v root="$base" -v dirs="$dir_mode" \
             -v ramp_start="$ramp_start" -v ramp_end="$ramp_end" '
         function shade(age, line,   t, g) {
             t = (age - ramp_start) / (ramp_end - ramp_start)
