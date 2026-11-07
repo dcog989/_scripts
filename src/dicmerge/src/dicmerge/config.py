@@ -106,6 +106,14 @@ def _default_config() -> Config:
                 "enabled": True,
                 "paths": ["~/.config/libreoffice/4/user/wordbook/*.dic"],
             },
+            "markdownrs": {
+                "enabled": True,
+                "paths": ["~/.local/share/com.markdownrs.editor/custom-spelling.dic"],
+            },
+            "opencode": {
+                "enabled": True,
+                "paths": ["~/.config/ai.opencode.desktop/Custom Dictionary.txt"],
+            },
             "kde_sonnet": {
                 "enabled": True,
                 "paths": _kde_sonnet_paths(),

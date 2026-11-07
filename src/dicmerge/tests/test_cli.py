@@ -14,6 +14,8 @@ def _write_config(tmp_path: Path) -> Path:
         "sources": {
             "firefox": {"enabled": True, "paths": [str(tmp_path / "src/*/persdict.dat")]},
             "codebook": {"enabled": False, "paths": []},
+            "markdownrs": {"enabled": False, "paths": []},
+            "opencode": {"enabled": False, "paths": []},
             "obsidian": {"enabled": False, "paths": []},
             "libreoffice": {"enabled": False, "paths": []},
             "kde_sonnet": {"enabled": False, "paths": []},

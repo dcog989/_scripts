@@ -31,6 +31,8 @@ On first run, `~/.config/dicmerge/config.yaml` is created automatically with def
 | Thunderbird | `~/.thunderbird/*/persdict.dat`                                                                                                                   |
 | Obsidian    | `~/Documents/Obsidian/*/*.dic`, `~/.config/obsidian/Custom Dictionary.txt`                                                                        |
 | LibreOffice | `~/.config/libreoffice/4/user/wordbook/*.dic`                                                                                                     |
+| MarkdownRS  | `~/.local/share/com.markdownrs.editor/custom-spelling.dic`                                                                                        |
+| OpenCode    | `~/.config/ai.opencode.desktop/Custom Dictionary.txt`                                                                                             |
 | KDE Sonnet  | `~/.hunspell_<LANG>` (falls back to `~/.hunspell_*`)                                                                                              |
 | Vim/Neovim  | `~/.vim/spell/*.add`, `~/.config/nvim/spell/*.add`                                                                                                |
 | Gedit       | `~/.local/share/gedit/spellcheck/words`                                                                                                           |
@@ -52,13 +54,16 @@ Written to `~/dicmerge-output/combined.txt` (configurable under `output`): one w
 Run from this directory:
 
 ```sh
-uv sync                  # Create/refresh the dev environment
-uv run dicmerge          # Run from source
-uv run ruff check        # Lint
-uv run ruff format .     # Format
-uv run mypy src/         # Type check
-uv run pytest            # Test
-uv clean                 # Clean build artifacts
+uv sync                      # Create/refresh the dev environment
+uv tool upgrade --all        # global uv-installed tools
+uv tool upgrade dicmerge     # just dicmerge
+uv lock --upgrade && uv sync # this project's Python deps (run in src/dicmerge)
+uv run dicmerge              # Run from source
+uv run ruff check            # Lint
+uv run ruff format .         # Format
+uv run mypy src/             # Type check
+uv run pytest                # Test
+uv clean                     # Clean build artifacts
 ```
 
 ## License
