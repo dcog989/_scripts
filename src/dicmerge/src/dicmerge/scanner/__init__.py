@@ -1,11 +1,12 @@
 from pathlib import Path
 
 from dicmerge.scanner.base import Scanner
+from dicmerge.scanner.codebook import CodebookScanner
 from dicmerge.scanner.firefox import FirefoxScanner
 from dicmerge.scanner.libreoffice import LibreOfficeScanner
 from dicmerge.scanner.plaintext import PlainTextScanner
 
-_SCANNERS: tuple[type[Scanner], ...] = (FirefoxScanner, LibreOfficeScanner)
+_SCANNERS: tuple[type[Scanner], ...] = (CodebookScanner, FirefoxScanner, LibreOfficeScanner)
 
 
 def get_scanner(path: Path) -> Scanner:

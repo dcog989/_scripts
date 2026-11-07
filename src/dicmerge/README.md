@@ -27,6 +27,7 @@ On first run, `~/.config/dicmerge/config.yaml` is created automatically with def
 
 | Source      | Path(s)                                                                                                                                           |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codebook    | `~/.config/codebook/codebook.toml`                                                                                                                |
 | Firefox     | `~/.mozilla/firefox/*/persdict.dat`, `~/.config/mozilla/firefox/*/persdict.dat`, `~/.var/app/org.mozilla.firefox/.mozilla/firefox/*/persdict.dat` |
 | Thunderbird | `~/.thunderbird/*/persdict.dat`                                                                                                                   |
 | Obsidian    | `~/Documents/Obsidian/*/*.dic`, `~/.config/obsidian/Custom Dictionary.txt`                                                                        |

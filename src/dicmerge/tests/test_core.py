@@ -90,6 +90,7 @@ def _make_config(tmp_path: Path) -> tuple[Path, Path, Path]:
                 "enabled": True,
                 "paths": [str(src / "firefox/*/persdict.dat")],
             },
+            "codebook": {"enabled": False, "paths": []},
             "obsidian": {"enabled": False, "paths": []},
             "libreoffice": {"enabled": False, "paths": []},
             "kde_sonnet": {"enabled": False, "paths": []},

@@ -8,6 +8,5 @@ class PlainTextScanner(Scanner):
     def matches(cls, path: Path) -> bool:
         return True
 
-    @staticmethod
-    def format_output(words: list[str]) -> str:
+    def format_output(self, path: Path, words: list[str]) -> str:
         return "\n".join(words) + "\n"

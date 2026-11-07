@@ -19,6 +19,5 @@ class LibreOfficeScanner(Scanner):
             return False
         return first == "OOoUserDict1"
 
-    @staticmethod
-    def format_output(words: list[str]) -> str:
+    def format_output(self, path: Path, words: list[str]) -> str:
         return _LO_HEADER + "\n".join(words) + "\n"

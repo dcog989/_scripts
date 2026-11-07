@@ -21,6 +21,5 @@ class Scanner(ABC):
                 words.append(word)
         return words
 
-    @staticmethod
     @abstractmethod
-    def format_output(words: list[str]) -> str: ...
+    def format_output(self, path: Path, words: list[str]) -> str: ...

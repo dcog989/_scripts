@@ -118,7 +118,7 @@ def _write_back(
                         backup = path.with_suffix(path.suffix + config["write_back"]["backup_suffix"])
                         shutil.copy2(path, backup)
                     scanner = get_scanner(path)
-                    content = scanner.format_output(unique)
+                    content = scanner.format_output(path, unique)
                     write_text_atomic(path, content)
                 except OSError as e:
                     raise WriteBackError(f"Cannot write back to {path}: {e}") from e

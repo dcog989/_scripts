@@ -90,6 +90,10 @@ def _default_config() -> Config:
                     "~/.var/app/org.mozilla.firefox/.mozilla/firefox/*/persdict.dat",
                 ],
             },
+            "codebook": {
+                "enabled": True,
+                "paths": ["~/.config/codebook/codebook.toml"],
+            },
             "obsidian": {
                 "enabled": True,
                 "paths": [

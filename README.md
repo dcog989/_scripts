@@ -107,7 +107,7 @@ Installs a fixed set of packages: repo apps via `pacman`, AUR apps via `yay` (or
 
 ## dicmerge
 
-Python package: scans custom user dictionaries from Firefox, Thunderbird, Obsidian, LibreOffice, KDE Sonnet, Vim/Neovim and Gedit, deduplicates case-insensitively, and writes one sorted wordlist. `--write-back` overwrites each source with the merged list, keeping a `.bak` copy first.
+Python package: scans custom user dictionaries from Codebook, Firefox, Thunderbird, Obsidian, LibreOffice, KDE Sonnet, Vim/Neovim and Gedit, deduplicates case-insensitively, and writes one sorted wordlist. `--write-back` overwrites each source with the merged list, keeping a `.bak` copy first.
 
 ```sh
 uv tool install ./src/dicmerge      # install the `dicmerge` command

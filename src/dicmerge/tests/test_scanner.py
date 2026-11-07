@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from dicmerge.scanner.codebook import CodebookScanner
 from dicmerge.scanner.firefox import FirefoxScanner
 from dicmerge.scanner.libreoffice import LibreOfficeScanner
 from dicmerge.scanner.plaintext import PlainTextScanner
@@ -130,3 +133,37 @@ def test_libreoffice_does_not_match_undecodable_file(tmp_path: Path):
     f = tmp_path / "custom.dic"
     f.write_bytes("foo\n".encode("utf-16-le"))
     assert LibreOfficeScanner.matches(f) is False
+
+
+CODEBOOK = 'dictionaries = [\n    "en_us",\n    "en_gb",\n]\nwords = [\n    "foo",\n    "bar",\n]\n'
+
+
+def test_codebook_matches_filename(tmp_path: Path):
+    assert CodebookScanner.matches(tmp_path / "codebook.toml") is True
+    assert CodebookScanner.matches(tmp_path / "other.toml") is False
+
+
+def test_codebook_read_returns_words_only(tmp_path: Path):
+    f = tmp_path / "codebook.toml"
+    f.write_text(CODEBOOK, encoding="utf-8")
+    assert CodebookScanner().read(f) == ["foo", "bar"]
+
+
+def test_codebook_read_missing_words_key(tmp_path: Path):
+    f = tmp_path / "codebook.toml"
+    f.write_text('dictionaries = ["en_us"]\n', encoding="utf-8")
+    assert CodebookScanner().read(f) == []
+
+
+def test_codebook_read_rejects_non_string_words(tmp_path: Path):
+    f = tmp_path / "codebook.toml"
+    f.write_text("words = [1, 2]\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="list of strings"):
+        CodebookScanner().read(f)
+
+
+def test_codebook_format_output_preserves_dictionaries(tmp_path: Path):
+    f = tmp_path / "codebook.toml"
+    f.write_text(CODEBOOK, encoding="utf-8")
+    rendered = CodebookScanner().format_output(f, ["bar", "foo"])
+    assert rendered == 'dictionaries = [\n    "en_us",\n    "en_gb",\n]\nwords = [\n    "bar",\n    "foo",\n]\n'
