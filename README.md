@@ -29,6 +29,8 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 ln -sf /path/to/src.fish ~/.config/fish/functions/   # symlink to fish functions directory
 ```
 
+The fish functions share `src/_project-group.fish`; keep it beside them. The symlink install resolves it automatically; if you copy the functions, copy that file too.
+
 ## Install Shell Scripts
 
 ```sh
@@ -50,9 +52,9 @@ Cleans:
 - **AUR build cache** — cleans `~/.cache/yay` or `~/.cache/paru` when an AUR helper is present. Both AUR steps are skipped while `yay`, `paru` or `makepkg` runs.
 - **Unneeded AUR deps** — removes orphaned AUR dependencies via `yay -Yc` / `paru -c`.
 
-The closing summary counts what each step removed (packages, cache files, stale dirs) and how much space the caches gave back.
+The closing summary counts what each step removed (packages, cache files, stale dirs) and how much space the caches gave back. Orphan removal uses `pacman -Rs`, so modified config files are kept as `.pacsave`.
 
-Requires `pacman`, `paccache`, `find`, `pgrep`, optionally `yay` or `paru`. One confirmation guards everything; pacman/paccache steps need `sudo`. No AUR helper: AUR steps skip with a notice. The build cache is emptied directly (`rm -rf ~/.cache/yay/*`), not via `yay -Sc`, which also runs `pacman -Sc` and would break the keep-3 policy.
+Requires `pacman`, `paccache`, `find`, `pgrep`, optionally `yay` or `paru`. One confirmation guards everything; pacman/paccache steps need `sudo`. No AUR helper: AUR steps skip with a notice. The build cache is emptied directly (every top-level entry under `~/.cache/yay`), not via `yay -Sc`, which also runs `pacman -Sc` and would break the keep-3 policy.
 
 ```sh
 repository-clean
@@ -126,7 +128,7 @@ LACT "Gaming" profile hook: monitor refresh switch plus parking background tray 
 - `on` — records the active refresh mode, stops any running `cliptoo` and KopiaUI (`/opt/KopiaUI/kopia-ui`) instances (recording which), then switches `DP-1` to 240Hz.
 - `off` — restores the recorded mode (120Hz fallback if none was captured), then restarts only the apps that were running at activation. State lives in `~/.local/state/lact-gaming/state`.
 
-Idempotent: an existing state file (a previous `off` never fired) is kept rather than overwritten, so a later `off` still restores the right mode and apps.
+Idempotent: an existing state file (a previous `off` never fired) is kept rather than overwritten, so a later `off` still restores the right mode and apps. A failed relaunch keeps the state so a later `off` retries.
 
 ```sh
 ./src/lact-gaming.sh on     # gaming profile activated
@@ -160,7 +162,7 @@ Maintenance for the OpenCode v2 database:
 - Runs `VACUUM`.
 - Prints a `summary` line: rows pruned, DB size delta / reusable pages, snapshot and log bytes freed.
 
-From a terminal it prompts for backup, dead-path grace, session age and VACUUM. With no tty (cron, systemd `--user`) it runs unattended: VACUUM on, backup off, no age prune. Pinning a setting with its env var skips that prompt.
+From a terminal it prompts for backup, dead-path grace, session age and VACUUM. With no tty (cron, systemd `--user`) it runs unattended: VACUUM on, backup on, no age prune. Pinning a setting with its env var skips that prompt.
 
 A path must stay missing for `DEAD_GRACE_DAYS` (default 7) before its sessions are pruned, only paths under `ROOTS` (default `~/Projects`) count, and DB writes (backup and `VACUUM`, which needs an exclusive lock) are skipped while OpenCode runs — snapshot and log cleanup still run. Output goes to `~/.local/state/opencode/maintenance/maintenance.log` and the terminal.
 
@@ -174,16 +176,16 @@ All are environment variables; none are command-line flags.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `BACKUP` | prompt (`Y`); `0` when unattended, `1` under `DRY_RUN` | Gzipped DB backup before any write. A failed backup aborts the run. |
+| `BACKUP` | prompt (`Y`); `1` when unattended or under `DRY_RUN` | Gzipped DB backup before any write. A failed backup aborts the run. |
 | `BACKUP_DIR` | `~/Downloads` | Where `opencode-db-<date>.db.gz` goes. |
 | `BACKUP_KEEP` | `3` | Newest backups kept; older ones deleted after each successful backup. |
 | `DEAD_GRACE_DAYS` | prompt (`7`) | Days a missing project path must stay missing before its rows are pruned. Also the minimum age of an orphan snapshot dir. |
-| `SESSION_MAX_AGE_DAYS` | prompt (`60`); `0` when unattended, `60` under `DRY_RUN` | Prune sessions inactive this many days. `0` disables. Without a tty it also needs `ASSUME_YES=1`, else the prune is skipped. |
+| `SESSION_MAX_AGE_DAYS` | prompt (`60`); `0` when unattended, `60` under `DRY_RUN` | Prune sessions inactive this many days, restricted to `ROOTS`. `0` disables. Without a tty it also needs `ASSUME_YES=1`, else the prune is skipped. |
 | `ASSUME_YES` | `0` | `1` deletes ripe sessions without the `[y/N]` confirmation. |
 | `DO_VACUUM` | prompt (`Y`) / `1` | Run `VACUUM` at the end. Needs OpenCode closed; also compacts pages freed by earlier runs. |
 | `LOG_MAX_MB` | `50` | Rotate `opencode.log` and `maintenance.log` above this size. `0` disables. |
 | `LOG_KEEP` | `3` | `.gz` archives kept per log. |
-| `ROOTS` | `$HOME/Projects` | Space-separated allowlist of path prefixes; sessions outside it are never pruned. Quote multiple: `ROOTS="$HOME/Projects /mnt/data/src"`. |
+| `ROOTS` | `$HOME/Projects` | Space-separated allowlist of path prefixes; sessions outside it are never pruned, by dead-path or age. Quote multiple: `ROOTS="$HOME/Projects /mnt/data/src"`. |
 | `SNAP_DIR` | `$OC_DIR/snapshot` | Revert-snapshot store; project dirs without a DB row are deleted once older than `DEAD_GRACE_DAYS`. |
 | `OC_DIR` | `~/.local/share/opencode` | Base data directory; `OC_DB` and `OC_LOG` default inside it. |
 | `OC_DB`, `OC_LOG` | `$OC_DIR/opencode.db`, `$OC_DIR/log/opencode.log` | Override the DB or log path. |
@@ -253,7 +255,7 @@ Read-only report of potential system-wide issues. Signal-only: a section prints 
 
 - **Failed units** — failed system and user systemd units.
 - **Packaging** — `pacman -Dk` database errors, `pacman -Qkq` missing package files (expected runtime paths filtered), `pacman -Qtdq` true orphans, and `paccheck --md5sum --files --quiet` when `pacutils` is installed.
-- **Logs** — priority-`err` journal lines for this boot, kernel-only `err` lines, and `dmesg --level=err,warn`.
+- **Logs** — non-kernel priority-`err` journal lines for this boot, kernel-only `err` lines, and `dmesg --level=err,warn`.
 - **Btrfs** — `device stats` error counters and `scrub status -R` per detected filesystem.
 - **SMART** — health verdict plus critical attributes per detected disk.
 
@@ -261,7 +263,7 @@ Privileged checks (Btrfs, SMART, `dmesg`) run through `sudo` when available and 
 
 ```sh
 ./src/health-check.sh              # full report (only findings shown)
-./src/health-check.sh -q           # skip the paccheck md5sum sweep
+./src/health-check.sh -q           # skip the paccheck integrity sweep
 ./src/health-check.sh -v           # verbose: raw output, no noise filter
 ./src/health-check.sh --no-sudo    # skip privileged checks (no effect as root)
 ```
