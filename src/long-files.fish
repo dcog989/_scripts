@@ -43,7 +43,7 @@ function long-files --description 'Recurse project directory for over-sized file
     end
     set -l root_list (string join "$sep" $roots)
 
-    # grep -I treats NUL-containing files as binary and skips them, so this
-    # picks up any text file without an extension whitelist.
-    fd -t f --search-path "$base" -0 | xargs -0 -r grep -lIZ '' | xargs -0 -r wc -l | __project_group lines "$limit" "$root_list" "$project" "$base" | sort -t "$sep" -k1,1 -k2,2nr | __project_show lines "$limit" "$span"
+    # PDFs are excluded by extension; grep -I skips other binary files, so
+    # there is still no extension whitelist.
+    fd -t f -E '*.[pP][dD][fF]' --search-path "$base" -0 | xargs -0 -r grep -lIZ '' | xargs -0 -r wc -l | __project_group lines "$limit" "$root_list" "$project" "$base" | sort -t "$sep" -k1,1 -k2,2nr | __project_show lines "$limit" "$span"
 end

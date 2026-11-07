@@ -207,7 +207,7 @@ last-installed 100     # last 100
 
 ## long-files
 
-Reports text files over 400 lines (or a custom limit), grouped by enclosing `.git` project, largest first. Files outside any `.git` project group by top-level directory. Binary detection is by content, so no extension whitelist. Hidden files and `.gitignore` matches are skipped (unlike `big-files`). Requires `fd`, `grep`, `xargs` and `wc`.
+Reports text files over 400 lines (or a custom limit), grouped by enclosing `.git` project, largest first. Files outside any `.git` project group by top-level directory. PDFs are skipped by extension; other binary detection is by content, so no extension whitelist. Hidden files and `.gitignore` matches are skipped (unlike `big-files`). Requires `fd`, `grep`, `xargs` and `wc`.
 
 ```sh
 long-files                # scan the current directory, limit 400 lines
