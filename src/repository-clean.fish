@@ -88,7 +88,7 @@ function repository-clean --description 'List then clean pacman/AUR package left
     echo
     echo $sec"== Removing orphans =="$off
     if test -n "$orphans"
-        if sudo pacman -Rns --noconfirm $orphans
+        if sudo pacman -Rs --noconfirm $orphans
             set n_orphans (count $orphans)
             echo "  "$ok"removed $n_orphans orphaned package(s)"$off
         else
@@ -168,7 +168,7 @@ function repository-clean --description 'List then clean pacman/AUR package left
             set -l aur_files_before (count (find ~/.cache/$aur -type f 2>/dev/null))
             if test $aur_files_before -eq 0
                 echo "  "$dim"nothing to clean"$off
-            else if rm -rf ~/.cache/$aur/* 2>/dev/null
+            else if find ~/.cache/$aur -mindepth 1 -maxdepth 1 -exec rm -rf -- {} + 2>/dev/null
                 set n_aur_files (math $aur_files_before - (count (find ~/.cache/$aur -type f 2>/dev/null)))
             else
                 echo "  "$bad"cache clean failed"$off
