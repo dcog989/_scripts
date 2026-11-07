@@ -251,7 +251,7 @@ activate() {
 }
 
 deactivate() {
-    local dir file mode app line
+    local dir file mode app line failed=0 waited
     dir=$(state_dir)
     file="$dir/state"
     if [ ! -f "$file" ]; then
@@ -278,15 +278,33 @@ deactivate() {
             app=*) app="${line#app=}" ;;
             *) continue ;;
         esac
+        case " ${APPS[*]} " in
+            *" $app "*) ;;
+            *) log "unknown app '$app' in $file - ignoring"; continue ;;
+        esac
         if is_running "$app"; then
             log "$app already running, skipping"
         else
             log "starting $app"
             start_app "$app"
+            # setsid --fork reports success even when exec fails; confirm it started.
+            waited=0
+            while ! is_running "$app" && [ "$waited" -lt 20 ]; do
+                sleep 0.1
+                waited=$((waited + 1))
+            done
+            if ! is_running "$app"; then
+                log "failed to restart $app; keeping state for a retry"
+                failed=1
+            fi
         fi
     done < "$file"
 
-    rm -f "$file"
+    if [ "$failed" -eq 1 ]; then
+        log "state kept at $file"
+    else
+        rm -f "$file"
+    fi
 }
 
 case "${1:-}" in
