@@ -147,7 +147,9 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         if test (count $ignored_files) -gt 0
             set -a flagged_repos "$name"
             if test -n "$untrack"; and test -z "$dry_run"
-                git -C "$repo" rm --cached --quiet -- $ignored_files
+                if not string join0 -- $ignored_files | xargs -0 -r git -C "$repo" rm --cached --quiet --
+                    echo "$red x$off $name $red(git rm --cached failed)$off"
+                end
             end
             echo "$gold !$off $name $gold(tracked+ignored:"(count $ignored_files)" file(s))$off"
             for f in $ignored_files
@@ -205,10 +207,16 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         end
         set pruned_total (math $pruned_total + $pruned)
         git -C "$repo" worktree prune >/dev/null 2>&1
-        git -C "$repo" $keep_reflog gc $gc_flags
+        if not git -C "$repo" $keep_reflog gc $gc_flags
+            echo "$red x$off $name $red(gc failed; skipped)$off"
+            set skipped (math $skipped + 1)
+            continue
+        end
         git -C "$repo" commit-graph write --reachable >/dev/null 2>&1
         if test "$has_midx" = true
-            git -C "$repo" repack --write-midx=incremental --quiet >/dev/null 2>&1
+            if not git -C "$repo" repack --write-midx=incremental --quiet >/dev/null 2>&1
+                echo "$gold !$off $name $gold(repack --write-midx failed; gc ok)$off"
+            end
         end
         set -l fsck_out (git -C "$repo" fsck --full --no-progress 2>&1)
         set -l dangling (count (string match -r 'dangling ' -- $fsck_out))
