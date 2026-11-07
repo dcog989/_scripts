@@ -1,0 +1,50 @@
+name: dicmerge CI
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["src/dicmerge/**", ".github/workflows/dicmerge-ci.yml"]
+  pull_request:
+    paths: ["src/dicmerge/**", ".github/workflows/dicmerge-ci.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: src/dicmerge
+
+jobs:
+  lint:
+    name: Lint & typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --all-groups
+      - name: Ruff check
+        run: uv run ruff check src tests
+      - name: Ruff format
+        run: uv run ruff format --check src tests
+      - name: Mypy
+        run: uv run mypy src/
+
+  test:
+    name: Test (coverage gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --all-groups
+      - name: Test
+        run: uv run pytest

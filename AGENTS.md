@@ -23,6 +23,7 @@ Scripts live in `src/`, with music tooling in `src/music/`:
 - `src/music/flac-conversion.py` — scan a FLAC tree, transcode anything above 16-bit/48 kHz into a separate tree, verify the outputs.
 - `src/music/artists-with-flac.sh` — list Music artists that contain at least one FLAC.
 - `src/music/README.md` — flac-conversion workflow, defaults and caveats.
+- `src/dicmerge/` — Python package (uv, hatchling, ruff, mypy, pytest): merge custom user dictionaries from KDE apps; tests in `src/dicmerge/tests/`.
 - `README.md` — usage and overview.
 
 ## Workflow
@@ -31,10 +32,12 @@ Scripts live in `src/`, with music tooling in `src/music/`:
 
 - Install (fish): source `src/<name>.fish`, or copy to `~/.config/fish/functions/`.
 - Install (shell): `chmod +x src/*.sh src/music/*.sh` and run directly.
+- Install (Python): `uv tool install ./src/dicmerge` from the repository root.
 - Dev: edit the script; reload fish config or re-source the file.
 - Test: `fish -n src/<name>.fish` (fish syntax check) and `bash -n src/<name>.sh` (bash syntax check).
-- Lint: none configured.
-- Format: `fish_indent src/<name>.fish` for fish; keep shell scripts POSIX/bash-clean.
+- Test (dicmerge): `cd src/dicmerge && uv run pytest`.
+- Lint: none configured; dicmerge uses `uv run ruff check` and `uv run mypy src/` from `src/dicmerge/`.
+- Format: `fish_indent src/<name>.fish` for fish; keep shell scripts POSIX/bash-clean; `uv run ruff format` for dicmerge.
 - Build: none.
 
 ### Script Form
@@ -50,6 +53,7 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 
 - After editing a fish file, run `fish -n src/<name>.fish` to confirm it parses.
 - After editing a shell script, run `bash -n src/<name>.sh` to confirm it parses.
+- After editing dicmerge, run `cd src/dicmerge && uv run pytest` (plus `ruff check` and `mypy src/`).
 - Do not run destructive scripts in destructive mode during development unless the user asks.
 
 ## File System Access
@@ -62,7 +66,8 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 
 ## Testing
 
-- No automated tests. Validate via syntax checks (`fish -n`, `bash -n`) and manual dry-run review.
+- No automated tests for the shell/fish scripts. Validate via syntax checks (`fish -n`, `bash -n`) and manual dry-run review.
+- `src/dicmerge/` is the exception: its pytest suite must pass after Python changes.
 - Prefer scripts' built-in dry-run/`-n` paths when reviewing behavior.
 - Do not create test files for trivial changes, or for behavior that is not reliably unit-testable in the test environment (e.g. UI layout/click mapping). Prefer no new files; only add a test when the logic is genuinely testable and worth guarding.
 

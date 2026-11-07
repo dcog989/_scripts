@@ -1,0 +1,26 @@
+version: 2
+updates:
+  - package-ecosystem: 'uv'
+    directory: '/src/dicmerge'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+    groups:
+      runtime:
+        patterns:
+          - 'PyYAML'
+      test:
+        patterns:
+          - 'pytest'
+          - 'pytest-cov'
+      tooling:
+        patterns:
+          - 'mypy'
+          - 'ruff'
+          - 'types-PyYAML'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10

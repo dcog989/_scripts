@@ -7,6 +7,7 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 | Script | Type | Purpose |
 | --- | --- | --- |
 | [`src/big-files.fish`](#big-files)                      | fish function | List files above a size threshold, largest first. |
+| [`src/dicmerge/`](#dicmerge)                            | Python package | Merge custom user dictionaries from multiple Linux apps. |
 | [`src/git-maintenance.fish`](#git-maintenance)          | fish function | Optimize and report issues for every git repo under a directory tree. |
 | [`src/health-check.sh`](#health-check)                  | shell script  | Read-only report of system-wide issues. |
 | [`src/install-apps.sh`](#install-apps)                  | shell script  | Install a fixed set of repo and AUR packages. |
@@ -101,6 +102,22 @@ Installs a fixed set of packages: repo apps via `pacman`, AUR apps via `yay` (or
 ```sh
 ./src/install-apps.sh
 ```
+
+---
+
+## dicmerge
+
+Python package: scans custom user dictionaries from Firefox, Thunderbird, Obsidian, LibreOffice, KDE Sonnet, Vim/Neovim and Gedit, deduplicates case-insensitively, and writes one sorted wordlist. `--write-back` overwrites each source with the merged list, keeping a `.bak` copy first.
+
+```sh
+uv tool install ./src/dicmerge      # install the `dicmerge` command
+dicmerge                            # write ~/dicmerge-output/combined.txt
+dicmerge --dry-run                  # preview, write nothing
+dicmerge --write-back               # push merged words back to every source
+dicmerge --list-sources             # show discovered files
+```
+
+First run creates `~/.config/dicmerge/config.yaml`. Filters and custom sources live there. Requires Python 3.14 and `uv`; the only runtime dependency is PyYAML. Tests, ruff and mypy config are in `src/dicmerge/pyproject.toml`; see `src/dicmerge/README.md`.
 
 ---
 
