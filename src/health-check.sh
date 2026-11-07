@@ -52,7 +52,7 @@ and SMART. Prints only checks with findings; -v dumps everything.
 
 Usage:
   health-check.sh            full report (prompts for sudo when needed)
-  health-check.sh -q         quick: skip the paccheck md5sum sweep
+  health-check.sh -q         quick: skip the paccheck integrity sweep
   health-check.sh -v         verbose: raw output, no benign-noise filter
   health-check.sh --no-sudo  skip privileged checks (no effect when run as root)
 
@@ -188,24 +188,30 @@ fi
 
 # --- paccheck ---------------------------------------------------------------
 if command -v paccheck >/dev/null 2>&1; then
-  pc=(--files --quiet)
-  [ "$QUICK" -eq 0 ] && pc=(--md5sum "${pc[@]}")
-  if [ "$PRIV" -eq 1 ]; then
-    out=$(run_priv paccheck "${pc[@]}" 2>&1) || true
+  if [ "$QUICK" -eq 1 ]; then
+    skipped=$((skipped + 1))
   else
-    out=$(paccheck "${pc[@]}" 2>&1) || true
+    pc=(--md5sum --files --quiet)
+    if [ "$PRIV" -eq 1 ]; then
+      out=$(run_priv paccheck "${pc[@]}" 2>&1) || true
+    else
+      out=$(paccheck "${pc[@]}" 2>&1) || true
+    fi
+    if [ "$PRIV" -eq 0 ]; then
+      out=$(printf '%s\n' "$out" | grep -v 'read error (Permission denied)' || true)
+    fi
+    # pacman -Qkq already reports missing files, with the ignore list applied
+    out=$(printf '%s\n' "$out" | grep -v ' missing file$' || true)
+    finish "Package integrity (paccheck ${pc[*]})" "$out"
   fi
-  if [ "$PRIV" -eq 0 ]; then
-    out=$(printf '%s\n' "$out" | grep -v 'read error (Permission denied)' || true)
-  fi
-  finish "Package integrity (paccheck ${pc[*]})" "$out"
 else
   skipped=$((skipped + 1))
 fi
 
 # --- journal ----------------------------------------------------------------
 if command -v journalctl >/dev/null 2>&1; then
-  raw=$(journalctl -b -p err --no-pager -q 2>/dev/null || true)
+  # kernel lines have their own section below
+  raw=$(journalctl -b -p err --no-pager -q 2>/dev/null | grep -v ' kernel: ' || true)
   finding=$(printf '%s\n' "$raw" | purge)
   finish "Journal errors this boot" "$([ "$VERBOSE" -eq 1 ] && printf '%s' "$raw" || printf '%s' "$finding")" \
     "$([ -n "$finding" ] && echo 1 || echo 0)"
@@ -242,33 +248,42 @@ elif [ "$PRIV" -ne 1 ] || ! command -v btrfs >/dev/null 2>&1; then
   skipped=$((skipped + 1))
 else
   body=""
+  dev_bad=0
   for mp in $BTRFS_MOUNTS; do
     if out=$(run_priv btrfs device stats "$mp" 2>&1); then
       bad=$(printf '%s\n' "$out" | awk '$NF + 0 != 0')
       if [ -n "$bad" ]; then
+        dev_bad=1
         body="$(append "$body")${body:+$'\n\n'}$mp:"$'\n'"$bad"
       elif [ "$VERBOSE" -eq 1 ]; then
         body="$(append "$body")${body:+$'\n\n'}$mp:"$'\n'"$out"
       fi
     else
+      dev_bad=1
       body="$(append "$body")${body:+$'\n\n'}$mp: error:"$'\n'"$out"
     fi
   done
-  finish "Btrfs device stats" "$body"
+  finish "Btrfs device stats" "$body" "$dev_bad"
 
   body=""
+  scrub_bad=0
   for mp in $BTRFS_MOUNTS; do
-    out=$(run_priv btrfs scrub status -R "$mp" 2>&1 || true)
-    es=$(printf '%s\n' "$out" | grep -m1 -i 'Error summary' || true)
-    bad=0
-    [ -n "$es" ] && printf '%s' "$es" | awk '{for (i = 1; i <= NF; i++) {split($i, a, "="); if (a[2] + 0 > 0) f = 1}} END {exit !f}' && bad=1
-    if [ "$bad" -eq 1 ]; then
-      body="$(append "$body")${body:+$'\n\n'}$mp: $es"
-    elif [ "$VERBOSE" -eq 1 ]; then
-      body="$(append "$body")${body:+$'\n\n'}$mp:"$'\n'"$out"
+    if out=$(run_priv btrfs scrub status -R "$mp" 2>&1); then
+      es=$(printf '%s\n' "$out" | grep -m1 -i 'Error summary' || true)
+      bad=0
+      [ -n "$es" ] && printf '%s' "$es" | awk '{for (i = 1; i <= NF; i++) {split($i, a, "="); if (a[2] + 0 > 0) f = 1}} END {exit !f}' && bad=1
+      if [ "$bad" -eq 1 ]; then
+        scrub_bad=1
+        body="$(append "$body")${body:+$'\n\n'}$mp: $es"
+      elif [ "$VERBOSE" -eq 1 ]; then
+        body="$(append "$body")${body:+$'\n\n'}$mp:"$'\n'"$out"
+      fi
+    else
+      scrub_bad=1
+      body="$(append "$body")${body:+$'\n\n'}$mp: error:"$'\n'"$out"
     fi
   done
-  finish "Btrfs scrub status" "$body"
+  finish "Btrfs scrub status" "$body" "$scrub_bad"
 fi
 
 # --- smart ------------------------------------------------------------------
