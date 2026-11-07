@@ -1,13 +1,13 @@
 #!/bin/bash
 #
 # lact-gaming.sh - LACT "Gaming" profile hook: switch the DP-1 refresh rate and
-# park clipboard/backup tray apps while a game is running.
+# park clipboard/backup/update-notifier tray apps while a game is running.
 #
 # On activation the refresh mode active beforehand is recorded, any running
-# cliptoo / KopiaUI instances are recorded (so they can be restored later) then
-# stopped, and finally the monitor drops to its game mode. On deactivation the
-# monitor returns to the recorded mode and only the apps that were running at
-# activation are started again.
+# cliptoo / KopiaUI / Cachy-Update instances are recorded (so they can be
+# restored later) then stopped, and finally the monitor drops to its game mode.
+# On deactivation the monitor returns to the recorded mode and only the apps
+# that were running at activation are started again.
 #
 # State lives in ${XDG_STATE_HOME:-$HOME/.local/state}/lact-gaming/state and
 # doubles as the "profile is active" marker: if it already exists when `on`
@@ -17,7 +17,7 @@
 # Designed to run as root from lactd; it enters the desktop session user's
 # environment to reach the Wayland/X11 session.
 #
-# Usage:  lact-gaming.sh on    -> 240Hz, stop cliptoo and KopiaUI
+# Usage:  lact-gaming.sh on    -> 240Hz, stop cliptoo, KopiaUI and Cachy-Update
 #         lact-gaming.sh off   -> restore recorded mode, restart stopped apps
 #
 set -euo pipefail
@@ -33,19 +33,23 @@ STOP_TRIES=50
 STOP_INTERVAL=0.1
 
 # App table: app name -> pgrep/pkill match flag, match pattern, launch command.
+# cachy-update needs --tray; start_app supplies it.
 declare -A APP_MATCH_FLAG=(
     [cliptoo]='-x'
     [kopia-ui]='-f'
+    [cachy-update]='-f'
 )
 declare -A APP_MATCH_PATTERN=(
     [cliptoo]='cliptoo'
     [kopia-ui]='/opt/KopiaUI/'
+    [cachy-update]='/usr/lib/arch-update/arch-update-tray'
 )
 declare -A APP_COMMAND=(
     [cliptoo]='/usr/local/bin/cliptoo'
     [kopia-ui]='/opt/KopiaUI/kopia-ui'
+    [cachy-update]='/usr/bin/cachy-update'
 )
-APPS=(cliptoo kopia-ui)
+APPS=(cliptoo kopia-ui cachy-update)
 
 usage() {
     echo "usage: $(basename "$0") {on|off}" >&2
@@ -162,8 +166,8 @@ wayland_display_name() {
     return 1
 }
 
-# _launch <binary> - detach the app into the user's graphical session, reusing
-# the desktop environment so toolkits load the KDE platform theme.
+# _launch <command> [args...] - detach the app into the user's graphical
+# session, reusing the desktop environment so toolkits load the KDE theme.
 _launch() {
     local uid src
     local -a env_args=()
@@ -186,14 +190,18 @@ _launch() {
     fi
 
     if [ "$(id -u)" -eq 0 ]; then
-        runuser -u "$SESSION_USER" -- env -i "${env_args[@]}" setsid --fork "$1" >/dev/null 2>&1
+        runuser -u "$SESSION_USER" -- env -i "${env_args[@]}" setsid --fork "$@" >/dev/null 2>&1
     else
-        env -i "${env_args[@]}" setsid --fork "$1" >/dev/null 2>&1
+        env -i "${env_args[@]}" setsid --fork "$@" >/dev/null 2>&1
     fi
 }
 
 start_app() {
-    _launch "${APP_COMMAND[$1]}"
+    if [ "$1" = "cachy-update" ]; then
+        _launch "${APP_COMMAND[$1]}" --tray
+    else
+        _launch "${APP_COMMAND[$1]}"
+    fi
 }
 
 # current_mode - print the active DP-1 mode (e.g. 3840x2160@120), or nothing.

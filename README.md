@@ -125,8 +125,8 @@ First run creates `~/.config/dicmerge/config.yaml`. Filters and custom sources l
 
 LACT "Gaming" profile hook: monitor refresh switch plus parking background tray apps.
 
-- `on` — records the active refresh mode, stops any running `cliptoo` and KopiaUI (`/opt/KopiaUI/kopia-ui`) instances (recording which), then switches `DP-1` to 240Hz.
-- `off` — restores the recorded mode (120Hz fallback if none was captured), then restarts only the apps that were running at activation. State lives in `~/.local/state/lact-gaming/state`.
+- `on` — records the active refresh mode, stops any running `cliptoo`, KopiaUI (`/opt/KopiaUI/kopia-ui`) and Cachy-Update systray applet (`/usr/lib/arch-update/arch-update-tray`) instances (recording which), then switches `DP-1` to 240Hz.
+- `off` — restores the recorded mode (120Hz fallback if none was captured), then restarts only the apps that were running at activation. Cachy-Update is started again as `cachy-update --tray`. State lives in `~/.local/state/lact-gaming/state`.
 
 Idempotent: an existing state file (a previous `off` never fired) is kept rather than overwritten, so a later `off` still restores the right mode and apps. A failed relaunch keeps the state so a later `off` retries.
 
