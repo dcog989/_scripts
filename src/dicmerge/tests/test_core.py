@@ -358,6 +358,66 @@ def test_run_write_back_skips_unreadable_source(tmp_path: Path, monkeypatch):
     assert not (firefox_dir / "persdict.dat.dicmerge.bak").exists()
 
 
+def test_run_write_back_keeps_filtered_words(tmp_path: Path):
+    config_path, src, out = _make_config(tmp_path)
+
+    firefox_dir = src / "firefox" / "default"
+    firefox_dir.mkdir(parents=True)
+    ff_file = firefox_dir / "persdict.dat"
+    ff_file.write_text("ok\nCOVID19\nx\n", encoding="utf-8")
+
+    cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    cfg["write_back"]["create_backup"] = False
+    cfg["filters"] = {
+        "min_length": 2,
+        "max_length": 64,
+        "allow_numbers": False,
+        "exclude_patterns": ["^[0-9]+$"],
+    }
+    config_path.write_text(yaml.dump(cfg), encoding="utf-8")
+
+    result = run(config_path=config_path, write_back=True)
+
+    assert result["total_unique"] == 1
+    assert (out / "combined.txt").read_text(encoding="utf-8") == "ok\n"
+    assert ff_file.read_text(encoding="utf-8") == "ok\nCOVID19\nx\n"
+
+
+def test_run_write_back_continues_after_one_failure(tmp_path: Path, monkeypatch):
+    import pytest
+
+    from dicmerge.output import write_text_atomic as real_write
+
+    config_path, src, _ = _make_config(tmp_path)
+
+    firefox_dir = src / "firefox" / "default"
+    firefox_dir.mkdir(parents=True)
+    ff_file = firefox_dir / "persdict.dat"
+    ff_file.write_text("foo\n", encoding="utf-8")
+
+    lo_dir = src / "libreoffice"
+    lo_dir.mkdir(parents=True)
+    lo_file = lo_dir / "custom.dic"
+    lo_file.write_text("OOoUserDict1\nlang: en-US\ntype: positive\nreplacement: \nbar\n", encoding="utf-8")
+
+    cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    cfg["sources"]["libreoffice"] = {"enabled": True, "paths": [str(lo_dir / "*.dic")]}
+    cfg["write_back"]["create_backup"] = False
+    config_path.write_text(yaml.dump(cfg), encoding="utf-8")
+
+    def _fail_firefox(path, content):
+        if path.name == "persdict.dat":
+            raise OSError("disk full")
+        real_write(path, content)
+
+    monkeypatch.setattr("dicmerge.core.write_text_atomic", _fail_firefox)
+
+    with pytest.raises(WriteBackError, match="disk full"):
+        run(config_path=config_path, write_back=True)
+
+    assert lo_file.read_text(encoding="utf-8").endswith("foo\nbar\n")
+
+
 def test_run_skips_file_with_nul_bytes(tmp_path: Path):
     config_path, src, out = _make_config(tmp_path)
 

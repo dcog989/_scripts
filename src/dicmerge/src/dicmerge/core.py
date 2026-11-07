@@ -39,9 +39,11 @@ def run(
 
     filtered = _apply_filters(all_words, config["filters"])
     unique = deduplicate(filtered)
+    write_back_words = deduplicate(all_words)
 
     if config["output"]["sort"]:
         unique = sorted(unique, key=str.casefold)
+        write_back_words = sorted(write_back_words, key=str.casefold)
 
     output_path = Path(config["output"]["path"]).expanduser()
 
@@ -50,7 +52,7 @@ def run(
 
     write_back_stats: dict[str, list[tuple[str, int]]] = {}
     if write_back:
-        write_back_stats = _write_back(discovered, unique, config, dry_run, failed)
+        write_back_stats = _write_back(discovered, write_back_words, config, dry_run, failed)
 
     return {
         "source_stats": stats,
@@ -105,6 +107,7 @@ def _write_back(
     failed: set[Path],
 ) -> dict[str, list[tuple[str, int]]]:
     stats: dict[str, list[tuple[str, int]]] = {}
+    errors: list[str] = []
 
     for name, files in discovered.items():
         for path in files:
@@ -123,9 +126,12 @@ def _write_back(
                     content = scanner.format_output(path, unique)
                     write_text_atomic(path, content)
                 except OSError as e:
-                    raise WriteBackError(f"Cannot write back to {path}: {e}") from e
+                    errors.append(f"{path}: {e}")
+                    continue
             stats.setdefault(name, []).append((path.name, new_words))
 
+    if errors:
+        raise WriteBackError("Cannot write back to: " + "; ".join(errors))
     return stats
 
 

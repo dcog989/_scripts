@@ -42,3 +42,16 @@ def test_write_words_preserves_existing_mode(tmp_path: Path):
     path.chmod(0o640)
     write_words(path, ["new"])
     assert stat.S_IMODE(path.stat().st_mode) == 0o640
+
+
+def test_write_words_follows_symlink(tmp_path: Path):
+    target = tmp_path / "real" / "dict.txt"
+    target.parent.mkdir()
+    target.write_text("old\n", encoding="utf-8")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+
+    write_words(link, ["new"])
+
+    assert link.is_symlink()
+    assert target.read_text(encoding="utf-8") == "new\n"

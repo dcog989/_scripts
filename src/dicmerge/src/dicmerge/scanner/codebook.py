@@ -1,9 +1,12 @@
 import json
+import re
 import tomllib
 from pathlib import Path
 
 from dicmerge.scanner.base import Scanner
 from dicmerge.util import read_text_with_fallback
+
+_WORDS_ARRAY = re.compile(r"(?ms)^words[ \t]*=[ \t]*\[.*?^\]|^words[ \t]*=[ \t]*\[[^\]\n]*\]")
 
 
 class CodebookScanner(Scanner):
@@ -19,16 +22,9 @@ class CodebookScanner(Scanner):
         return words
 
     def format_output(self, path: Path, words: list[str]) -> str:
-        dictionaries = _read_dictionaries(path)
-        lines = ["dictionaries = ["]
-        lines += [f"    {json.dumps(entry)}," for entry in dictionaries]
-        lines += ["]", "words = ["]
-        lines += [f"    {json.dumps(word)}," for word in words]
-        lines.append("]")
-        return "\n".join(lines) + "\n"
-
-
-def _read_dictionaries(path: Path) -> list[str]:
-    data = tomllib.loads(read_text_with_fallback(path))
-    dictionaries = data.get("dictionaries", [])
-    return [entry for entry in dictionaries if isinstance(entry, str)]
+        block = "words = [\n" + "".join(f"    {json.dumps(word)},\n" for word in words) + "]"
+        text = read_text_with_fallback(path)
+        if _WORDS_ARRAY.search(text):
+            return _WORDS_ARRAY.sub(lambda _match: block, text, count=1)
+        separator = "" if text.endswith("\n") else "\n"
+        return f"{text}{separator}{block}\n"

@@ -167,3 +167,24 @@ def test_codebook_format_output_preserves_dictionaries(tmp_path: Path):
     f.write_text(CODEBOOK, encoding="utf-8")
     rendered = CodebookScanner().format_output(f, ["bar", "foo"])
     assert rendered == 'dictionaries = [\n    "en_us",\n    "en_gb",\n]\nwords = [\n    "bar",\n    "foo",\n]\n'
+
+
+def test_codebook_format_output_preserves_unknown_keys_and_comments(tmp_path: Path):
+    f = tmp_path / "codebook.toml"
+    original = "# keep me\n[settings]\ncase_sensitive = true\n\n" + CODEBOOK
+    f.write_text(original, encoding="utf-8")
+
+    rendered = CodebookScanner().format_output(f, ["baz"])
+
+    assert "# keep me" in rendered
+    assert "[settings]\ncase_sensitive = true" in rendered
+    assert 'words = [\n    "baz",\n]' in rendered
+
+
+def test_libreoffice_format_output_preserves_header(tmp_path: Path):
+    f = tmp_path / "custom.dic"
+    f.write_text("OOoUserDict1\nlang: de-DE\ntype: positive\nreplacement: \nHaus\n", encoding="utf-8")
+
+    rendered = LibreOfficeScanner().format_output(f, ["Haus", "Baum"])
+
+    assert rendered == "OOoUserDict1\nlang: de-DE\ntype: positive\nreplacement: \nHaus\nBaum\n"

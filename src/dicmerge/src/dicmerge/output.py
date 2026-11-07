@@ -11,6 +11,7 @@ def write_words(path: Path, words: list[str]) -> None:
 
 
 def write_text_atomic(path: Path, content: str) -> None:
+    path = path.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     mode = stat.S_IMODE(path.stat().st_mode) if path.exists() else _DEFAULT_MODE
     tmp_path: Path | None = None
@@ -25,6 +26,7 @@ def write_text_atomic(path: Path, content: str) -> None:
             tmp_path = Path(tmp.name)
             tmp.write(content)
             tmp.flush()
+            os.fsync(tmp.fileno())
         if tmp_path is None:
             raise RuntimeError("temporary file was not created")
         os.chmod(tmp_path, mode)
