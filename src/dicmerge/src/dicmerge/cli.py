@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dicmerge import __version__
 from dicmerge.config import DEFAULT_CONFIG_PATH
-from dicmerge.core import RunResult, list_sources, run
+from dicmerge.core import Prepared, list_sources, prepare, write
 from dicmerge.exceptions import ConfigError, DicmergeError
 
 _SHOW_CONFIG = object()
@@ -50,27 +50,19 @@ def main() -> None:
         if args.list_sources:
             _print_sources(list_sources(args.config))
             return
-        result = run(
-            config_path=args.config,
-            write_back=True,
-            dry_run=True,
-        )
+        prepared = prepare(args.config)
     except DicmergeError as e:
         print(f"Error: {e}")
         sys.exit(e.exit_code)
 
-    _print_report(result)
+    _print_report(prepared)
 
     if not _confirm_write():
         print("\nNothing written.")
         return
 
     try:
-        result = run(
-            config_path=args.config,
-            write_back=True,
-            dry_run=False,
-        )
+        result = write(prepared, write_back=True)
     except DicmergeError as e:
         print(f"Error: {e}")
         sys.exit(e.exit_code)
@@ -93,23 +85,29 @@ def _confirm_write() -> bool:
     return answer.strip().casefold() in {"y", "yes"}
 
 
-def _print_report(result: RunResult) -> None:
+def _print_report(prepared: Prepared) -> None:
     print("\nScanning:")
-    for name, count in sorted(result["source_stats"].items()):
-        if count:
+    for name, count in sorted(prepared["source_stats"].items()):
+        failed = prepared["failed_stats"].get(name, 0)
+        if failed:
+            print(f"  ⚠ {name}: {failed} file(s) failed (see log)")
+        elif count:
             print(f"  ✓ {name}: {count} words")
         else:
             print(f"  ⚠ {name}: not found")
 
-    print(
-        f"\nTotal unique words: {result['total_unique']} "
-        f"(from {result['total_raw']} raw, {result['total_filtered']} after filters)"
-    )
-    print(f"Output would be written to: {result['output_path']}")
+    for warning in prepared["warnings"]:
+        print(f"  ⚠ {warning}")
 
-    if result["write_back_stats"]:
+    print(
+        f"\nTotal unique words: {len(prepared['output_words'])} "
+        f"(from {prepared['total_raw']} raw, {prepared['total_filtered']} after filters)"
+    )
+    print(f"Output would be written to: {prepared['output_path']}")
+
+    if prepared["write_back_preview"]:
         print("\nWrite-back (nothing written yet):")
-        for name, entries in sorted(result["write_back_stats"].items()):
+        for name, entries in sorted(prepared["write_back_preview"].items()):
             for filename, count in entries:
                 print(f"  ✓ {name}: {filename} → {count} new words")
 

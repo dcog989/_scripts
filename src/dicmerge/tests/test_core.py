@@ -4,7 +4,6 @@ import yaml
 
 from dicmerge.core import _apply_filters, _should_skip_rws, run
 from dicmerge.exceptions import NoSourcesError, OutputError, WriteBackError
-from dicmerge.scanner.firefox import FirefoxScanner
 
 
 def test_should_skip_rws(tmp_path: Path):
@@ -339,23 +338,33 @@ def test_run_write_back_backup_failure_raises_writeback_error(tmp_path: Path, mo
 
 
 def test_run_write_back_skips_unreadable_source(tmp_path: Path, monkeypatch):
+    from dicmerge.scanner.plaintext import PlainTextScanner
+
     config_path, src, _ = _make_config(tmp_path)
 
-    firefox_dir = src / "firefox" / "default"
-    firefox_dir.mkdir(parents=True)
-    ff_file = firefox_dir / "persdict.dat"
-    ff_file.write_text("foo\n", encoding="utf-8")
+    good_dir = src / "firefox" / "good"
+    bad_dir = src / "firefox" / "bad"
+    good_dir.mkdir(parents=True)
+    bad_dir.mkdir(parents=True)
+    good_file = good_dir / "persdict.dat"
+    bad_file = bad_dir / "persdict.dat"
+    good_file.write_text("foo\n", encoding="utf-8")
+    bad_file.write_text("bar\n", encoding="utf-8")
 
-    def _fail_read(self, path):
-        raise OSError("cannot read")
+    real_read = PlainTextScanner.read
 
-    monkeypatch.setattr(FirefoxScanner, "read", _fail_read)
+    def _read(self, path):
+        if path.parent.name == "bad":
+            raise OSError("cannot read")
+        return real_read(self, path)
+
+    monkeypatch.setattr(PlainTextScanner, "read", _read)
 
     result = run(config_path=config_path, write_back=True)
 
-    assert result["write_back_stats"] == {}
-    assert ff_file.read_text(encoding="utf-8") == "foo\n"
-    assert not (firefox_dir / "persdict.dat.dicmerge.bak").exists()
+    assert result["write_back_stats"] == {"firefox": [("persdict.dat", 0)]}
+    assert bad_file.read_text(encoding="utf-8") == "bar\n"
+    assert not (bad_dir / "persdict.dat.dicmerge.bak").exists()
 
 
 def test_run_write_back_keeps_filtered_words(tmp_path: Path):
@@ -418,14 +427,58 @@ def test_run_write_back_continues_after_one_failure(tmp_path: Path, monkeypatch)
     assert lo_file.read_text(encoding="utf-8").endswith("foo\nbar\n")
 
 
-def test_run_skips_file_with_nul_bytes(tmp_path: Path):
+def test_run_raises_when_no_readable_source(tmp_path: Path):
+    import pytest
+
     config_path, src, out = _make_config(tmp_path)
 
     d = src / "firefox" / "default"
     d.mkdir(parents=True)
     (d / "persdict.dat").write_bytes("foo\n".encode("utf-16-le"))
 
+    with pytest.raises(NoSourcesError):
+        run(config_path=config_path)
+
+    assert not (out / "combined.txt").exists()
+
+
+def test_run_reports_failed_sources(tmp_path: Path, monkeypatch):
+    from dicmerge.scanner.plaintext import PlainTextScanner
+
+    config_path, src, _ = _make_config(tmp_path)
+
+    good = src / "firefox" / "good"
+    bad = src / "firefox" / "bad"
+    good.mkdir(parents=True)
+    bad.mkdir(parents=True)
+    (good / "persdict.dat").write_text("foo\n", encoding="utf-8")
+    (bad / "persdict.dat").write_text("bar\n", encoding="utf-8")
+
+    real_read = PlainTextScanner.read
+
+    def _read(self, path):
+        if path.parent.name == "bad":
+            raise OSError("cannot read")
+        return real_read(self, path)
+
+    monkeypatch.setattr(PlainTextScanner, "read", _read)
+
     result = run(config_path=config_path)
 
-    assert result["source_stats"]["firefox"] == 0
-    assert (out / "combined.txt").read_text(encoding="utf-8") == ""
+    assert result["source_stats"]["firefox"] == 1
+    assert result["failed_stats"]["firefox"] == 1
+
+
+def test_run_warns_about_running_apps(tmp_path: Path, monkeypatch):
+    config_path, src, _ = _make_config(tmp_path)
+
+    d = src / "firefox" / "default"
+    d.mkdir(parents=True)
+    (d / "persdict.dat").write_text("foo\n", encoding="utf-8")
+
+    monkeypatch.setattr("dicmerge.core.shutil.which", lambda _name: "/usr/bin/pgrep")
+    monkeypatch.setattr("dicmerge.core._process_running", lambda _pgrep, _name: True)
+
+    result = run(config_path=config_path)
+
+    assert result["warnings"] == ["firefox is running; close it before write-back"]

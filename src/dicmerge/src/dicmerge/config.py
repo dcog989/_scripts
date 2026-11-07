@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 import yaml
 
@@ -161,17 +161,33 @@ def _normalise(raw: dict[str, Any]) -> Config:
     if "output" in raw:
         config["output"].update(raw["output"])
     if "sources" in raw:
+        if not isinstance(raw["sources"], dict):
+            raise TypeError("sources must be a mapping")
         for name, src_cfg in raw["sources"].items():
+            if not isinstance(src_cfg, dict):
+                raise TypeError(f"source {name!r} must be a mapping")
             if name in config["sources"]:
-                config["sources"][name].update(src_cfg)
+                config["sources"][name].update(cast(SourceConfig, src_cfg))
             else:
-                config["sources"][name] = src_cfg
+                if "paths" not in src_cfg:
+                    raise ValueError(f"source {name!r} needs a paths list")
+                config["sources"][name] = cast(SourceConfig, src_cfg)
+            if not isinstance(config["sources"][name]["paths"], list):
+                raise TypeError(f"source {name!r} paths must be a list")
         if "kde_sonnet" in raw["sources"]:
             raw_paths = raw["sources"]["kde_sonnet"].get("paths")
             if raw_paths == ["~/.hunspell_*"]:
                 config["sources"]["kde_sonnet"]["paths"] = _kde_sonnet_paths()
     if "custom_sources" in raw:
-        config["custom_sources"] = raw["custom_sources"]
+        custom_sources = raw["custom_sources"]
+        if not isinstance(custom_sources, list):
+            raise TypeError("custom_sources must be a list")
+        for entry in custom_sources:
+            if not isinstance(entry, dict) or "name" not in entry or "paths" not in entry:
+                raise ValueError("each custom source needs a name and paths")
+            if not isinstance(entry["paths"], list):
+                raise TypeError("custom source paths must be a list")
+        config["custom_sources"] = custom_sources
     if "write_back" in raw:
         config["write_back"].update(raw["write_back"])
     if "filters" in raw:

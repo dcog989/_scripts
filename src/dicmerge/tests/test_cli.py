@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from dicmerge import __version__
 from dicmerge.cli import main
 from dicmerge.exceptions import ConfigError
 
@@ -42,7 +43,7 @@ def test_cli_version(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.Mon
     with pytest.raises(SystemExit) as exc:
         main()
     assert exc.value.code == 0
-    assert "dicmerge" in capsys.readouterr().out
+    assert capsys.readouterr().out.strip() == f"dicmerge {__version__}"
 
 
 def test_cli_prints_default_config_path(capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:

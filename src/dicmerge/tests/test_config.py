@@ -41,6 +41,20 @@ def test_load_config_directory_raises_config_error(tmp_path: Path):
         load_config(tmp_path)
 
 
+def test_load_config_source_without_paths_raises_config_error(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("sources:\n  mysource:\n    enabled: true\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="needs a paths list"):
+        load_config(config_path)
+
+
+def test_load_config_custom_source_without_name_raises_config_error(tmp_path: Path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("custom_sources:\n  - paths: ['~/words.txt']\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="needs a name and paths"):
+        load_config(config_path)
+
+
 def test_normalise_merges_partial_config():
     raw = {"output": {"sort": False}}
     cfg = _normalise(raw)
