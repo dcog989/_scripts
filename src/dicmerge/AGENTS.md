@@ -30,7 +30,7 @@ dicmerge, a Python package to scan, merge, and optionally write back custom user
 | `tests/`                            | pytest suite       |
 | `pyproject.toml`                    | Project config     |
 | `~/.config/dicmerge/config.yaml`    | User configuration |
-| `~/dicmerge-output/combined.txt`    | Merged output      |
+| `~/dicmerge/combined-*.dic`         | Merged output      |
 | `~/.local/share/dicmerge/debug.log` | Debug log          |
 | `~/dicmerge/dicmerge-*.log`         | Run report         |
 

@@ -25,7 +25,7 @@ def test_default_config_sources():
 def test_load_config_writes_defaults_when_missing(tmp_path: Path):
     config_path = tmp_path / "dicmerge" / "config.yaml"
     cfg = load_config(config_path)
-    assert cfg["output"]["path"] == "~/dicmerge-output/combined.txt"
+    assert cfg["output"]["path"] == "~/dicmerge/combined-%Y%m%d-%H%M%S.dic"
     assert config_path.exists()
 
 
@@ -59,7 +59,20 @@ def test_normalise_merges_partial_config():
     raw = {"output": {"sort": False}}
     cfg = _normalise(raw)
     assert cfg["output"]["sort"] is False
-    assert cfg["output"]["path"] == "~/dicmerge-output/combined.txt"
+    assert cfg["output"]["path"] == "~/dicmerge/combined-%Y%m%d-%H%M%S.dic"
+
+
+def test_normalise_migrates_legacy_output_path():
+    cfg = _normalise({"output": {"path": "~/dicmerge-output/combined.txt"}})
+
+    assert cfg["output"]["path"] == "~/dicmerge/combined-%Y%m%d-%H%M%S.dic"
+
+
+def test_normalise_keeps_custom_output_path(tmp_path: Path):
+    custom = str(tmp_path / "my-words.txt")
+    cfg = _normalise({"output": {"path": custom}})
+
+    assert cfg["output"]["path"] == custom
 
 
 def test_normalise_overrides_sources():

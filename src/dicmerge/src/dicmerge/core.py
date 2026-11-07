@@ -8,7 +8,7 @@ from dicmerge.config import Config, FiltersConfig, load_config
 from dicmerge.dedup import deduplicate
 from dicmerge.exceptions import NoSourcesError, OutputError, WriteBackError
 from dicmerge.log import get_logger
-from dicmerge.output import write_text_atomic, write_words
+from dicmerge.output import expand_output_path, write_text_atomic, write_words
 from dicmerge.scanner import get_scanner
 from dicmerge.scanner.discovery import discover_source_files
 
@@ -75,7 +75,7 @@ def prepare(config_path: Path | None = None) -> Prepared:
         output_words = sorted(output_words, key=str.casefold)
         write_back_words = sorted(write_back_words, key=str.casefold)
 
-    output_path = Path(config["output"]["path"]).expanduser()
+    output_path = expand_output_path(config["output"]["path"])
     preview = _write_back(
         discovered,
         write_back_words,

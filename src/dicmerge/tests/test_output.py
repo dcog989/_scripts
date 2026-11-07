@@ -1,7 +1,22 @@
 import stat
+from datetime import datetime
 from pathlib import Path
 
-from dicmerge.output import write_words
+from dicmerge.output import expand_output_path, write_words
+
+
+def test_expand_output_path_expands_timestamp(tmp_path: Path):
+    pattern = str(tmp_path / "combined-%Y%m%d-%H%M%S.dic")
+
+    path = expand_output_path(pattern, datetime(2026, 11, 7, 16, 5, 0))
+
+    assert path == tmp_path / "combined-20261107-160500.dic"
+
+
+def test_expand_output_path_leaves_plain_path(tmp_path: Path):
+    path = tmp_path / "combined.dic"
+
+    assert expand_output_path(str(path)) == path
 
 
 def test_write_words_creates_file(tmp_path: Path):

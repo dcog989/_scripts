@@ -43,7 +43,7 @@ Custom sources can be added under `custom_sources` in the config file.
 
 ## Output
 
-Written to `~/dicmerge-output/combined.txt` (configurable under `output`): one word per line, deduplicated case-insensitively, sorted, UTF-8.
+Written to `~/dicmerge/combined-<timestamp>.dic` (configurable under `output`): one word per line, deduplicated case-insensitively, sorted, UTF-8. The path supports `strftime` tokens, so each run gets its own file; the default is `~/dicmerge/combined-%Y%m%d-%H%M%S.dic`.
 
 ## Write-back
 

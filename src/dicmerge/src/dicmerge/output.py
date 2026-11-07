@@ -1,9 +1,15 @@
 import os
 import stat
+from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 _DEFAULT_MODE = 0o644
+
+
+def expand_output_path(pattern: str, now: datetime | None = None) -> Path:
+    expanded = Path(pattern).expanduser()
+    return Path((now or datetime.now()).strftime(str(expanded)))
 
 
 def write_words(path: Path, words: list[str]) -> None:

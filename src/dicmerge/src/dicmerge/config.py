@@ -7,6 +7,8 @@ import yaml
 from dicmerge.exceptions import ConfigError
 
 DEFAULT_CONFIG_PATH = Path("~/.config/dicmerge/config.yaml").expanduser()
+DEFAULT_OUTPUT_PATH = "~/dicmerge/combined-%Y%m%d-%H%M%S.dic"
+_LEGACY_OUTPUT_PATH = "~/dicmerge-output/combined.txt"
 
 
 class OutputConfig(TypedDict):
@@ -78,7 +80,7 @@ def _kde_sonnet_paths() -> list[str]:
 def _default_config() -> Config:
     return {
         "output": {
-            "path": "~/dicmerge-output/combined.txt",
+            "path": DEFAULT_OUTPUT_PATH,
             "sort": True,
         },
         "sources": {
@@ -160,6 +162,8 @@ def _normalise(raw: dict[str, Any]) -> Config:
 
     if "output" in raw:
         config["output"].update(raw["output"])
+        if config["output"]["path"] == _LEGACY_OUTPUT_PATH:
+            config["output"]["path"] = DEFAULT_OUTPUT_PATH
     if "sources" in raw:
         if not isinstance(raw["sources"], dict):
             raise TypeError("sources must be a mapping")
