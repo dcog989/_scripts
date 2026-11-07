@@ -124,3 +124,4 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 - Explanations: essential context only. End question answers with `TL;DR:`, one sentence; omit for status updates and completed work.
 - Tone: no preamble, restating, hedging, disclaimers, emotional framing, or closing offers. Keep every fact, command, flag, path, default, caveat.
 - Edge Cases: state risks explicitly; ask when requirements are ambiguous.
+- Answer only what was asked; omit skipped items, asides, and optional suggestions unless requested.
