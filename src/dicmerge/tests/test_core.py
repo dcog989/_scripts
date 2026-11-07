@@ -233,8 +233,8 @@ def test_run_write_back_overwrites_files(tmp_path: Path):
 
     result = run(config_path=config_path, write_back=True)
 
-    assert result["write_back_stats"]["firefox"] == [("persdict.dat", 3)]
-    assert result["write_back_stats"]["libreoffice"] == [("custom.dic", 3)]
+    assert result["write_back_stats"]["firefox"] == [("persdict.dat", 2)]
+    assert result["write_back_stats"]["libreoffice"] == [("custom.dic", 1)]
     assert ff_file.read_text(encoding="utf-8") == "foo\nbar\nbaz\n"
     assert lo_file.read_text(encoding="utf-8") == (
         "OOoUserDict1\nlang: en-US\ntype: positive\nreplacement: \nfoo\nbar\nbaz\n"
@@ -272,7 +272,7 @@ def test_run_write_back_creates_backup(tmp_path: Path):
     assert (firefox_dir / "persdict.dat.dicmerge.bak").read_text(encoding="utf-8") == "foo\n"
 
 
-def test_run_write_back_flag_wins_over_config(tmp_path: Path):
+def test_run_write_back_reports_new_word_count(tmp_path: Path):
     config_path, src, _ = _make_config(tmp_path)
 
     firefox_dir = src / "firefox" / "default"
@@ -282,7 +282,7 @@ def test_run_write_back_flag_wins_over_config(tmp_path: Path):
 
     result = run(config_path=config_path, write_back=True)
 
-    assert result["write_back_stats"] == {"firefox": [("persdict.dat", 1)]}
+    assert result["write_back_stats"] == {"firefox": [("persdict.dat", 0)]}
     assert ff_file.read_text(encoding="utf-8") == "foo\n"
 
 
@@ -312,7 +312,7 @@ def test_run_write_back_dry_run_reports_targets_without_writing(tmp_path: Path):
 
     result = run(config_path=config_path, write_back=True, dry_run=True)
 
-    assert result["write_back_stats"] == {"firefox": [("persdict.dat", 2)]}
+    assert result["write_back_stats"] == {"firefox": [("persdict.dat", 0)]}
     assert ff_file.read_text(encoding="utf-8") == "foo\nbar\n"
     assert not (firefox_dir / "persdict.dat.dicmerge.bak").exists()
 

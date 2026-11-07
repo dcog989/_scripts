@@ -80,7 +80,7 @@ def main() -> None:
         print("\nWrite-back:")
         for name, entries in sorted(result["write_back_stats"].items()):
             for filename, count in entries:
-                print(f"  ✓ {name}: {filename} → {count} words")
+                print(f"  ✓ {name}: {filename} → {count} new words")
     print("\nDone.")
 
 
@@ -111,7 +111,7 @@ def _print_report(result: RunResult) -> None:
         print("\nWrite-back (nothing written yet):")
         for name, entries in sorted(result["write_back_stats"].items()):
             for filename, count in entries:
-                print(f"  ✓ {name}: {filename} → {count} words")
+                print(f"  ✓ {name}: {filename} → {count} new words")
 
 
 def _print_sources(discovered: dict[str, list[Path]]) -> None:

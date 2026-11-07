@@ -9,6 +9,7 @@ from dicmerge.exceptions import NoSourcesError, OutputError, WriteBackError
 from dicmerge.log import get_logger
 from dicmerge.output import write_text_atomic, write_words
 from dicmerge.scanner import get_scanner
+from dicmerge.scanner.base import Scanner
 from dicmerge.scanner.discovery import discover_source_files
 
 
@@ -112,19 +113,25 @@ def _write_back(
             if path in failed:
                 get_logger().warning("%s: %s: skipping write-back, scan failed", name, path.name)
                 continue
+            scanner = get_scanner(path)
+            new_words = _count_new_words(scanner, path, unique)
             if not dry_run:
                 try:
                     if config["write_back"]["create_backup"]:
                         backup = path.with_suffix(path.suffix + config["write_back"]["backup_suffix"])
                         shutil.copy2(path, backup)
-                    scanner = get_scanner(path)
                     content = scanner.format_output(path, unique)
                     write_text_atomic(path, content)
                 except OSError as e:
                     raise WriteBackError(f"Cannot write back to {path}: {e}") from e
-            stats.setdefault(name, []).append((path.name, len(unique)))
+            stats.setdefault(name, []).append((path.name, new_words))
 
     return stats
+
+
+def _count_new_words(scanner: Scanner, path: Path, unique: list[str]) -> int:
+    existing = {word.casefold() for word in scanner.read(path)}
+    return sum(1 for word in unique if word.casefold() not in existing)
 
 
 def _should_skip_rws(name: str, path: Path) -> bool:
