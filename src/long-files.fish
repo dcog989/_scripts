@@ -9,6 +9,8 @@
 #
 # `base` defaults to the current directory and `lines` to 400. A numeric
 # argument is taken as the line limit; any other argument as the base.
+source (path dirname (path resolve (status filename)))/_project-group.fish
+
 function long-files --description 'Recurse project directory for over-sized files'
     set -l base .
     # Files above this many lines are reported; it also anchors the colour ramp.
@@ -26,7 +28,7 @@ function long-files --description 'Recurse project directory for over-sized file
 
     # SOH as the internal field separator: paths may contain tabs.
     set -l sep (printf '\001')
-    set -l span (math "$limit * 1.5")
+    set -l span (math "max($limit * 1.5, 1)")
 
     set -l project
     if test -e "$base/.git"
@@ -43,52 +45,5 @@ function long-files --description 'Recurse project directory for over-sized file
 
     # grep -I treats NUL-containing files as binary and skips them, so this
     # picks up any text file without an extension whitelist.
-    fd -t f --search-path "$base" -0 | xargs -0 -r grep -lIZ '' | xargs -0 -r wc -l | awk -v roots="$root_list" -v project="$project" -v base="$base" -v limit="$limit" '
-        BEGIN { n = split(roots, R, "\001"); off = (base == "/" ? 1 : length(base) + 1) }
-        {
-            count = $1
-            # strip only the count prefix: rebuilding $0 from fields collapses
-            # runs of spaces inside the path
-            path = $0
-            sub(/^[ \t]*[0-9]+[ \t]+/, "", path)
-            if (path == "total") next
-            if (count <= limit) next
-            if (project != "") {
-                best = project
-            } else {
-                best = ""
-                for (i = 1; i <= n; i++) {
-                    if (index(path, R[i] "/") == 1 && length(R[i]) > length(best)) {
-                        best = R[i]
-                    }
-                }
-                if (best != "") {
-                    best = substr(best, off + 1)
-                } else {
-                    # Group = first path component under base.
-                    rel = substr(path, off + 1)
-                    if (index(rel, "/") == 0) best = "."
-                    else { split(rel, parts, "/"); best = parts[1] }
-                }
-            }
-            print best "\001" count "\001" path
-        }' | sort -t "$sep" -k1,1 -k2,2nr | awk -F "$sep" -v limit="$limit" -v span="$span" '
-    function paint(c,   t, g) {
-        t = (c - limit) / span
-        if (t < 0) t = 0
-        if (t > 1) t = 1
-        g = int(255 * (1 - t))
-        return esc "[38;2;255;" g ";" g "m" c esc "[0m"
-    }
-    BEGIN { esc = sprintf("%c", 27) }
-    {
-        if ($1 != dir) {
-            if (dir != "") {
-                printf "\n"
-            }
-            printf "%s=== %s ===%s\n", esc "[1;36m", $1, esc "[0m"
-            dir = $1
-        }
-        printf "%s\t%s\n", paint($2), $3
-    }'
+    fd -t f --search-path "$base" -0 | xargs -0 -r grep -lIZ '' | xargs -0 -r wc -l | __project_group lines "$limit" "$root_list" "$project" "$base" | sort -t "$sep" -k1,1 -k2,2nr | __project_show lines "$limit" "$span"
 end
