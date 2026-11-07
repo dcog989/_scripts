@@ -17,11 +17,12 @@ function last-installed --description 'Colourised tail of pacman transactions wi
     # Foreign packages (AUR) are those absent from every sync database.
     # shortcut: packages promoted into a repo or dropped from all repos since
     # install are mislabelled; upgrade if pacman ever logs the origin.
+    set -l repo_tmp
     set -l repo_file
     if command -q pacman
-        set repo_file (mktemp)
-        pacman -Slq 2>/dev/null | sort -u > $repo_file; or set repo_file ""
-        test -s "$repo_file"; or set repo_file ""
+        set repo_tmp (mktemp)
+        pacman -Slq 2>/dev/null | sort -u > $repo_tmp
+        test -s "$repo_tmp"; and set repo_file $repo_tmp
     end
 
     awk -v count=$count -v repo_file="$repo_file" '
@@ -99,6 +100,6 @@ function last-installed --description 'Colourised tail of pacman transactions wi
     }
     ' $log
     set -l rc $status
-    test -n "$repo_file"; and rm -f $repo_file
+    test -n "$repo_tmp"; and rm -f $repo_tmp
     return $rc
 end
