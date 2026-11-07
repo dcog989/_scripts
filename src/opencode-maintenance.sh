@@ -18,15 +18,15 @@
 #
 # Run from a terminal it asks four questions up front (backup, dead-path grace,
 # session age, VACUUM) and Enter accepts the default. With no tty - cron or
-# systemd --user - it runs unattended: VACUUM on, backup off, no age prune
-# unless SESSION_MAX_AGE_DAYS is set. Every variable below still overrides its
-# prompt, so a timer can pin any choice.
+# systemd --user - it runs unattended: VACUUM on, backup on, no age prune unless
+# SESSION_MAX_AGE_DAYS is set. Every variable below still overrides its prompt,
+# so a timer can pin any choice.
 #
-# Safe from cron / systemd --user. All filesystem/DB writes are skipped while
-# OpenCode is running.
+# Safe from cron / systemd --user. DB writes are skipped while OpenCode is
+# running; snapshot and log cleanup still run.
 #
 # Overrides (env):
-#   BACKUP=1            back up the DB first (interactive default; off unattended)
+#   BACKUP=1            back up the DB first (default; also unattended)
 #   BACKUP_DIR=$HOME/Downloads   where backups go
 #   BACKUP_KEEP=3       gzipped backups to keep, oldest removed
 #   DEAD_GRACE_DAYS=7   days a path must stay missing before pruning
@@ -35,10 +35,12 @@
 #   LOG_MAX_MB=50       rotate the log above this size (0 disables)
 #   LOG_KEEP=3          number of .gz archives to keep
 #   DO_VACUUM=1         VACUUM the DB each run (0 = skip; needs OpenCode closed)
-#   ROOTS=...           space-separated whitelist of path roots
+#   ROOTS=...           space-separated whitelist of path roots; dead-path and
+#                       age pruning both ignore sessions outside it
 #   SNAP_DIR=...        snapshot store (default $OC_DIR/snapshot)
 #   DRY_RUN=1           report only, never prompts
 set -euo pipefail
+umask 077  # the DB is 0600; keep the backup and state files private too
 
 OC_DIR="${OC_DIR:-$HOME/.local/share/opencode}"
 DB="${OC_DB:-$OC_DIR/opencode.db}"
@@ -150,7 +152,7 @@ flock -n 9 || { log "another run in progress"; exit 0; }
 # including Ctrl-C, but deliberately not /tmp - that is tmpfs here and the copy
 # is DB-sized.
 TMPD=$(mktemp -d -p "$STATE_DIR" maint.XXXXXX)
-trap 'rm -rf "$TMPD"' EXIT
+trap 'rm -rf "$TMPD"; exec 1>&- 2>&-; wait' EXIT
 
 oc_running() {
   pgrep -af 'opencode-desktop|ai\.opencode\.desktop|/bin/opencode( |$)|opencode serve' >/dev/null
@@ -189,7 +191,7 @@ if [ "$DRY_RUN" = "1" ]; then
   BACKUP="${BACKUP:-1}"
   SESSION_MAX_AGE_DAYS="${SESSION_MAX_AGE_DAYS:-60}"
 else
-  BACKUP="${BACKUP:-0}"
+  BACKUP="${BACKUP:-1}"
   SESSION_MAX_AGE_DAYS="${SESSION_MAX_AGE_DAYS:-0}"
 fi
 DEAD_GRACE_DAYS="${DEAD_GRACE_DAYS:-7}"
@@ -357,12 +359,64 @@ fi
 # ------------------------------------------------------------- age-based prune
 # Sessions are pruned by last activity (time_updated, epoch ms). Deleting a
 # session row cascades to messages, parts, todos, etc. (requires foreign_keys).
-if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && column_exists session_v2 time_updated; then
+# Only sessions whose directory is under ROOTS are eligible, matching the
+# allowlist used for dead-path pruning.
+age_prune() {  # age_prune <count|delete> <cutoff_ms>
+  python3 - "$DB" "$1" "$2" "${ROOTS[@]}" <<'PY'
+import sqlite3, sys
+
+db, mode, cutoff = sys.argv[1], sys.argv[2], int(sys.argv[3])
+roots = sys.argv[4:]
+
+con = sqlite3.connect(db)
+have = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+def cols(t): return {r[1] for r in con.execute(f"PRAGMA table_info('{t}')")}
+def has(t, *names):
+    return t in have and all(n in cols(t) for n in names)
+
+if not has("session_v2", "time_updated", "directory"):
+    if mode == "count":
+        print(0)
+    sys.exit(0)
+
+where = ["time_updated <= ?"]
+params = [cutoff]
+if roots:
+    where.append("(" + " OR ".join("directory = ? OR directory LIKE ?" for _ in roots) + ")")
+    for r in roots:
+        params.extend((r, r.rstrip("/") + "/%"))
+where_sql = " AND ".join(where)
+
+if mode == "count":
+    print(con.execute(f"SELECT count(*) FROM session_v2 WHERE {where_sql}", params).fetchone()[0])
+    sys.exit(0)
+
+con.execute("PRAGMA foreign_keys=ON")
+con.execute("BEGIN")
+counted = [t for t in ("session_v2", "session", "session_message", "message", "part") if t in have]
+def count(t): return con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
+before = {t: count(t) for t in counted}
+deleted = {}
+for t in ("session_v2", "session"):
+    if has(t, "time_updated", "directory"):
+        deleted[t] = con.execute(f"DELETE FROM {t} WHERE {where_sql}", params).rowcount
+con.commit()
+after = {t: count(t) for t in counted}
+ps = con.execute("PRAGMA page_size").fetchone()[0]
+reclaim = con.execute("PRAGMA freelist_count").fetchone()[0] * ps
+con.execute("PRAGMA optimize")
+print("deleted " + ", ".join(f"{t}={n}" for t, n in deleted.items()))
+print(f"reclaim={reclaim}")
+con.close()
+PY
+}
+
+if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && column_exists session_v2 time_updated && column_exists session_v2 directory; then
   age_days="$SESSION_MAX_AGE_DAYS"
   now=$(date +%s)
   cutoff_ms=$(( (now - age_days * 86400) * 1000 ))
-  n_old=$(sqlite3 "$DB" "SELECT count(*) FROM session_v2 WHERE time_updated <= $cutoff_ms;")
-  log "sessions inactive >${age_days}d: $n_old"
+  n_old=$(age_prune count "$cutoff_ms")
+  log "sessions inactive >${age_days}d under ROOTS: $n_old"
   if [ "$n_old" -gt 0 ]; then
     if [ "$DRY_RUN" = "1" ]; then
       log "DRY RUN - would prune $n_old sessions older than ${age_days}d"
@@ -379,31 +433,7 @@ if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && c
         fi
       fi
       if [ "$proceed" = 1 ]; then
-        out=$(python3 - "$DB" "$cutoff_ms" <<'PY'
-import sqlite3, sys
-db, cutoff = sys.argv[1], int(sys.argv[2])
-con = sqlite3.connect(db)
-con.execute("PRAGMA foreign_keys=ON")
-con.execute("BEGIN")
-have = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-def cols(t): return {r[1] for r in con.execute(f"PRAGMA table_info('{t}')")}
-counted = [t for t in ("session_v2", "session", "session_message", "message", "part") if t in have]
-def count(t): return con.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
-before = {t: count(t) for t in counted}
-deleted = {}
-for t in ("session_v2", "session"):
-    if t in have and "time_updated" in cols(t):
-        deleted[t] = con.execute(f"DELETE FROM {t} WHERE time_updated <= ?", (cutoff,)).rowcount
-con.commit()
-after = {t: count(t) for t in counted}
-ps = con.execute("PRAGMA page_size").fetchone()[0]
-reclaim = con.execute("PRAGMA freelist_count").fetchone()[0] * ps
-con.execute("PRAGMA optimize")
-print("deleted " + ", ".join(f"{t}={n}" for t, n in deleted.items()))
-print(f"reclaim={reclaim}")
-con.close()
-PY
-)
+        out=$(age_prune delete "$cutoff_ms")
         rc=$(printf '%s\n' "$out" | sed -n 's/^reclaim=//p')
         db_reclaim=${rc:-$db_reclaim}
         log "pruned sessions older than ${age_days}d: $(printf '%s\n' "$out" | grep -v '^reclaim=' | paste -sd'; ' -)"
@@ -461,6 +491,7 @@ fi
 
 # ------------------------------------------------------------------ summary
 db_saved=$(( db_size_before - db_size_after )); [ "$db_saved" -lt 0 ] && db_saved=0
-db_freed=$db_saved; [ "$db_reclaim" -gt "$db_freed" ] && db_freed=$db_reclaim
-total_freed=$(( db_freed + snap_bytes + log_bytes ))
+# db_reclaim is the pre-VACUUM freelist: reusable, not freed. The file delta is
+# the only reclaimed DB space; report the freelist separately.
+total_freed=$(( db_saved + snap_bytes + log_bytes ))
 log "summary: db $(hr "$db_size_before") -> $(hr "$db_size_after") (file saved $(hr "$db_saved"), reusable $(hr "$db_reclaim")); snapshots $(hr "$snap_bytes"); log $(hr "$log_bytes"); total reclaimed $(hr "$total_freed")"
