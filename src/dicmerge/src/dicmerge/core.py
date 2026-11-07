@@ -1,9 +1,9 @@
 import re
 import shutil
 from pathlib import Path
-from typing import Any
+from typing import TypedDict
 
-from dicmerge.config import load_config
+from dicmerge.config import Config, FiltersConfig, load_config
 from dicmerge.dedup import deduplicate
 from dicmerge.exceptions import NoSourcesError, OutputError, WriteBackError
 from dicmerge.log import get_logger
@@ -12,12 +12,21 @@ from dicmerge.scanner import get_scanner
 from dicmerge.scanner.discovery import discover_source_files
 
 
+class RunResult(TypedDict):
+    source_stats: dict[str, int]
+    total_raw: int
+    total_filtered: int
+    total_unique: int
+    write_back_stats: dict[str, list[tuple[str, int]]]
+    output_path: str
+
+
 def run(
     *,
     config_path: Path | None = None,
     write_back: bool = False,
     dry_run: bool = False,
-) -> dict[str, Any]:
+) -> RunResult:
     config = load_config(config_path)
     discovered = discover_source_files(config)
 
@@ -90,7 +99,7 @@ def _write_output(output_path: Path, unique: list[str]) -> None:
 def _write_back(
     discovered: dict[str, list[Path]],
     unique: list[str],
-    config: dict[str, Any],
+    config: Config,
     dry_run: bool,
     failed: set[Path],
 ) -> dict[str, list[tuple[str, int]]]:
@@ -125,7 +134,7 @@ def _should_skip_rws(name: str, path: Path) -> bool:
     return True
 
 
-def _apply_filters(words: list[str], filters: dict[str, Any]) -> list[str]:
+def _apply_filters(words: list[str], filters: FiltersConfig) -> list[str]:
     min_len = filters.get("min_length", 2)
     max_len = filters.get("max_length", 64)
     allow_numbers = filters.get("allow_numbers", False)

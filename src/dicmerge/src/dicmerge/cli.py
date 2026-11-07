@@ -14,6 +14,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="dicmerge",
         description="Scan, merge, and write back custom user dictionaries",
+        suggest_on_error=True,
     )
     parser.add_argument(
         "--write-back",

@@ -1,5 +1,4 @@
 import os
-import shutil
 import stat
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -29,7 +28,7 @@ def write_text_atomic(path: Path, content: str) -> None:
         if tmp_path is None:
             raise RuntimeError("temporary file was not created")
         os.chmod(tmp_path, mode)
-        shutil.move(tmp_path, path)
+        tmp_path.move(path)
     except Exception:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)

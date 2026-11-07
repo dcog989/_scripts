@@ -1,8 +1,8 @@
 import glob
 import hashlib
 from pathlib import Path
-from typing import Any
 
+from dicmerge.config import Config
 from dicmerge.log import get_logger
 
 
@@ -15,7 +15,8 @@ def _is_backup(path: Path) -> bool:
 
 def _content_hash(path: Path) -> str | None:
     try:
-        return hashlib.sha256(path.read_bytes()).hexdigest()
+        with path.open("rb") as f:
+            return hashlib.file_digest(f, "sha256").hexdigest()
     except OSError:
         return None
 
@@ -42,7 +43,7 @@ def _discover_paths(patterns: list[str], *, recursive: bool) -> list[Path]:
     return _drop_duplicate_content(sorted(set(files)))
 
 
-def discover_source_files(config: dict[str, Any]) -> dict[str, list[Path]]:
+def discover_source_files(config: Config) -> dict[str, list[Path]]:
     discovered: dict[str, list[Path]] = {}
 
     for name, source in config["sources"].items():

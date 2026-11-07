@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 import yaml
 
@@ -9,7 +9,44 @@ from dicmerge.exceptions import ConfigError
 DEFAULT_CONFIG_PATH = Path("~/.config/dicmerge/config.yaml").expanduser()
 
 
-def load_config(path: Path | None = None) -> dict[str, Any]:
+class OutputConfig(TypedDict):
+    path: str
+    sort: bool
+
+
+class SourceConfig(TypedDict, total=False):
+    enabled: bool
+    paths: list[str]
+    recursive: bool
+
+
+class CustomSourceConfig(TypedDict):
+    name: str
+    paths: list[str]
+    enabled: bool
+
+
+class WriteBackConfig(TypedDict):
+    create_backup: bool
+    backup_suffix: str
+
+
+class FiltersConfig(TypedDict):
+    min_length: int
+    max_length: int
+    allow_numbers: bool
+    exclude_patterns: list[str]
+
+
+class Config(TypedDict):
+    output: OutputConfig
+    sources: dict[str, SourceConfig]
+    custom_sources: list[CustomSourceConfig]
+    write_back: WriteBackConfig
+    filters: FiltersConfig
+
+
+def load_config(path: Path | None = None) -> Config:
     config_path = path or DEFAULT_CONFIG_PATH
 
     try:
@@ -38,7 +75,7 @@ def _kde_sonnet_paths() -> list[str]:
     return ["~/.hunspell_*"]
 
 
-def _default_config() -> dict[str, Any]:
+def _default_config() -> Config:
     return {
         "output": {
             "path": "~/dicmerge-output/combined.txt",
@@ -101,12 +138,12 @@ def _default_config() -> dict[str, Any]:
     }
 
 
-def _write_config(path: Path, config: dict[str, Any]) -> None:
+def _write_config(path: Path, config: Config) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.dump(config, default_flow_style=False), encoding="utf-8")
 
 
-def _normalise(raw: dict[str, Any]) -> dict[str, Any]:
+def _normalise(raw: dict[str, Any]) -> Config:
     config = _default_config()
 
     if "output" in raw:
