@@ -29,8 +29,6 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 ln -sf /path/to/src.fish ~/.config/fish/functions/   # symlink to fish functions directory
 ```
 
-The fish functions share `src/_project-group.fish`; keep it beside them. The symlink install resolves it automatically; if you copy the functions, copy that file too.
-
 ## Install Shell Scripts
 
 ```sh
