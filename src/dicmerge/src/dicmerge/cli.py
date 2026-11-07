@@ -4,7 +4,7 @@ from pathlib import Path
 
 from dicmerge import __version__
 from dicmerge.config import DEFAULT_CONFIG_PATH
-from dicmerge.core import list_sources, run
+from dicmerge.core import RunResult, list_sources, run
 from dicmerge.exceptions import ConfigError, DicmergeError
 
 _SHOW_CONFIG = object()
@@ -15,16 +15,6 @@ def main() -> None:
         prog="dicmerge",
         description="Scan, merge, and write back custom user dictionaries",
         suggest_on_error=True,
-    )
-    parser.add_argument(
-        "--write-back",
-        action="store_true",
-        help="Write new words back to source files",
-    )
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Preview only, no files written",
     )
     parser.add_argument(
         "--version",
@@ -60,17 +50,50 @@ def main() -> None:
         if args.list_sources:
             _print_sources(list_sources(args.config))
             return
-        if args.dry_run:
-            print("Dry run mode — no files will be written")
         result = run(
             config_path=args.config,
-            write_back=args.write_back,
-            dry_run=args.dry_run,
+            write_back=True,
+            dry_run=True,
         )
     except DicmergeError as e:
         print(f"Error: {e}")
         sys.exit(e.exit_code)
 
+    _print_report(result)
+
+    if not _confirm_write():
+        print("\nNothing written.")
+        return
+
+    try:
+        result = run(
+            config_path=args.config,
+            write_back=True,
+            dry_run=False,
+        )
+    except DicmergeError as e:
+        print(f"Error: {e}")
+        sys.exit(e.exit_code)
+
+    print(f"\nWritten: {result['output_path']}")
+    if result["write_back_stats"]:
+        print("\nWrite-back:")
+        for name, entries in sorted(result["write_back_stats"].items()):
+            for filename, count in entries:
+                print(f"  ✓ {name}: {filename} → {count} words")
+    print("\nDone.")
+
+
+def _confirm_write() -> bool:
+    try:
+        answer = input("Write changes? [y/N] ")
+    except EOFError:
+        print()
+        return False
+    return answer.strip().casefold() in {"y", "yes"}
+
+
+def _print_report(result: RunResult) -> None:
     print("\nScanning:")
     for name, count in sorted(result["source_stats"].items()):
         if count:
@@ -82,17 +105,13 @@ def main() -> None:
         f"\nTotal unique words: {result['total_unique']} "
         f"(from {result['total_raw']} raw, {result['total_filtered']} after filters)"
     )
-    output_label = "Output would be written to" if args.dry_run else "Output"
-    print(f"{output_label}: {result['output_path']}")
+    print(f"Output would be written to: {result['output_path']}")
 
     if result["write_back_stats"]:
-        heading = "Write-back (dry run — no files written):" if args.dry_run else "Write-back:"
-        print(f"\n{heading}")
+        print("\nWrite-back (nothing written yet):")
         for name, entries in sorted(result["write_back_stats"].items()):
             for filename, count in entries:
                 print(f"  ✓ {name}: {filename} → {count} words")
-
-    print("\nDone.")
 
 
 def _print_sources(discovered: dict[str, list[Path]]) -> None:

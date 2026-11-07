@@ -13,13 +13,12 @@ uv tool install ./src/dicmerge    # from the repository root
 ## Usage
 
 ```sh
-dicmerge                      # Merge and write ~/dicmerge-output/combined.txt
-dicmerge --dry-run            # Preview only, no files written
-dicmerge --write-back         # Overwrite each source with the merged wordlist
+dicmerge                      # Preview, then ask to write output and all sources
 dicmerge --list-sources       # Show discovered dictionary files
 dicmerge --version            # Show version
-dicmerge --config custom.yaml # Use an alternate config file
 ```
+
+`dicmerge` scans, prints the preview, then asks `Write changes? [y/N]`; Enter or `n` writes nothing. Answering `y` writes the combined wordlist and overwrites every source dictionary (each gets a `.dicmerge.bak` copy first).
 
 On first run, `~/.config/dicmerge/config.yaml` is created automatically with default settings.
 
@@ -44,7 +43,7 @@ Written to `~/dicmerge-output/combined.txt` (configurable under `output`): one w
 
 ## Write-back
 
-`--write-back` overwrites each source dictionary with the merged wordlist. Each original file is backed up with a `.bak` suffix before it is modified.
+`dicmerge` runs in two phases: preview, then write on confirmation. Each source file is backed up with a `.dicmerge.bak` suffix before it is overwritten.
 
 ---
 

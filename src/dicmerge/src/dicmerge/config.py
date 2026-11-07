@@ -131,7 +131,7 @@ def _default_config() -> Config:
         ],
         "write_back": {
             "create_backup": True,
-            "backup_suffix": ".bak",
+            "backup_suffix": ".dicmerge.bak",
         },
         "filters": {
             "min_length": 2,

@@ -4,22 +4,22 @@ A collection of scripts for maintaining Arch/CachyOS, pacman/AUR/git repositorie
 
 ## Contents
 
-| Script | Type | Purpose |
-| --- | --- | --- |
-| [`src/big-files.fish`](#big-files)                      | fish function | List files above a size threshold, largest first. |
-| [`src/dicmerge/`](#dicmerge)                            | Python package | Merge custom user dictionaries from multiple Linux apps. |
-| [`src/git-maintenance.fish`](#git-maintenance)          | fish function | Optimize and report issues for every git repo under a directory tree. |
-| [`src/health-check.sh`](#health-check)                  | shell script  | Read-only report of system-wide issues. |
-| [`src/install-apps.sh`](#install-apps)                  | shell script  | Install a fixed set of repo and AUR packages. |
-| [`src/lact-gaming.sh`](#lact-gaming)                    | shell script  | LACT Gaming hook: switch monitor refresh rate and park/restore apps. |
-| [`src/last-installed.fish`](#last-installed)            | fish function | List recently installed pacman/AUR apps. |
-| [`src/long-files.fish`](#long-files)                    | fish function | List text files by line length, grouped by directory. |
-| [`src/music/artists-with-flac.sh`](#music)              | shell script  | List artists under `/mnt/data/Music` that contain FLAC files. |
-| [`src/music/date-fix.py`](#music)                       | Python script | Normalize date tags to a four-digit year. |
-| [`src/music/flac-conversion.py`](#music)                | Python script | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree. |
-| [`src/old-files.fish`](#old-files)                      | fish function | List files older than a number of days. Use `-d` for directories. |
-| [`src/opencode-maintenance.sh`](#opencode-maintenance)  | shell script  | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log. |
-| [`src/repository-clean.fish`](#repository-clean)        | fish function | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
+| Script                                                 | Type           | Purpose                                                                        |
+| ------------------------------------------------------ | -------------- | ------------------------------------------------------------------------------ |
+| [`src/big-files.fish`](#big-files)                     | fish function  | List files above a size threshold, largest first.                              |
+| [`src/dicmerge/`](#dicmerge)                           | Python package | Merge custom user dictionaries from multiple Linux apps.                       |
+| [`src/git-maintenance.fish`](#git-maintenance)         | fish function  | Optimize and report issues for every git repo under a directory tree.          |
+| [`src/health-check.sh`](#health-check)                 | shell script   | Read-only report of system-wide issues.                                        |
+| [`src/install-apps.sh`](#install-apps)                 | shell script   | Install a fixed set of repo and AUR packages.                                  |
+| [`src/lact-gaming.sh`](#lact-gaming)                   | shell script   | LACT Gaming hook: switch monitor refresh rate and park/restore apps.           |
+| [`src/last-installed.fish`](#last-installed)           | fish function  | List recently installed pacman/AUR apps.                                       |
+| [`src/long-files.fish`](#long-files)                   | fish function  | List text files by line length, grouped by directory.                          |
+| [`src/music/artists-with-flac.sh`](#music)             | shell script   | List artists under `/mnt/data/Music` that contain FLAC files.                  |
+| [`src/music/date-fix.py`](#music)                      | Python script  | Normalize date tags to a four-digit year.                                      |
+| [`src/music/flac-conversion.py`](#music)               | Python script  | Cap hi-res FLAC at 16-bit / 48 kHz into a separate target tree.                |
+| [`src/old-files.fish`](#old-files)                     | fish function  | List files older than a number of days. Use `-d` for directories.              |
+| [`src/opencode-maintenance.sh`](#opencode-maintenance) | shell script   | Prune OpenCode DB rows and snapshots for dead projects, and rotate its log.    |
+| [`src/repository-clean.fish`](#repository-clean)       | fish function  | List then clean pacman/AUR package leftovers (orphans, caches, unneeded deps). |
 
 ---
 
@@ -107,13 +107,11 @@ Installs a fixed set of packages: repo apps via `pacman`, AUR apps via `yay` (or
 
 ## dicmerge
 
-Python package: scans custom user dictionaries from Codebook, Firefox, Thunderbird, Obsidian, LibreOffice, KDE Sonnet, Vim/Neovim and Gedit, deduplicates case-insensitively, and writes one sorted wordlist. `--write-back` overwrites each source with the merged list, keeping a `.bak` copy first.
+Python package: scans custom user dictionaries from Codebook, Firefox, Thunderbird, Obsidian, LibreOffice, KDE Sonnet, Vim/Neovim and Gedit, deduplicates case-insensitively, and writes one sorted wordlist. Confirming a run overwrites each source with the merged list, keeping a `.dicmerge.bak` copy first.
 
 ```sh
 uv tool install ./src/dicmerge      # install the `dicmerge` command
-dicmerge                            # write ~/dicmerge-output/combined.txt
-dicmerge --dry-run                  # preview, write nothing
-dicmerge --write-back               # push merged words back to every source
+dicmerge                            # preview, then ask to write output and all sources
 dicmerge --list-sources             # show discovered files
 ```
 

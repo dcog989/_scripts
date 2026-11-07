@@ -101,7 +101,7 @@ def _make_config(tmp_path: Path) -> tuple[Path, Path, Path]:
         "custom_sources": [],
         "write_back": {
             "create_backup": True,
-            "backup_suffix": ".bak",
+            "backup_suffix": ".dicmerge.bak",
         },
         "filters": {
             "min_length": 1,
@@ -265,9 +265,9 @@ def test_run_write_back_creates_backup(tmp_path: Path):
 
     run(config_path=config_path, write_back=True)
 
-    assert (firefox_dir / "persdict.dat.bak").exists()
-    assert (lo_dir / "custom.dic.bak").exists()
-    assert (firefox_dir / "persdict.dat.bak").read_text(encoding="utf-8") == "foo\n"
+    assert (firefox_dir / "persdict.dat.dicmerge.bak").exists()
+    assert (lo_dir / "custom.dic.dicmerge.bak").exists()
+    assert (firefox_dir / "persdict.dat.dicmerge.bak").read_text(encoding="utf-8") == "foo\n"
 
 
 def test_run_write_back_flag_wins_over_config(tmp_path: Path):
@@ -293,11 +293,11 @@ def test_run_write_back_refreshes_backup(tmp_path: Path):
     ff_file.write_text("foo\n", encoding="utf-8")
 
     run(config_path=config_path, write_back=True)
-    assert (firefox_dir / "persdict.dat.bak").read_text(encoding="utf-8") == "foo\n"
+    assert (firefox_dir / "persdict.dat.dicmerge.bak").read_text(encoding="utf-8") == "foo\n"
 
     ff_file.write_text("foo\nbar\n", encoding="utf-8")
     run(config_path=config_path, write_back=True)
-    assert (firefox_dir / "persdict.dat.bak").read_text(encoding="utf-8") == "foo\nbar\n"
+    assert (firefox_dir / "persdict.dat.dicmerge.bak").read_text(encoding="utf-8") == "foo\nbar\n"
 
 
 def test_run_write_back_dry_run_reports_targets_without_writing(tmp_path: Path):
@@ -312,7 +312,7 @@ def test_run_write_back_dry_run_reports_targets_without_writing(tmp_path: Path):
 
     assert result["write_back_stats"] == {"firefox": [("persdict.dat", 2)]}
     assert ff_file.read_text(encoding="utf-8") == "foo\nbar\n"
-    assert not (firefox_dir / "persdict.dat.bak").exists()
+    assert not (firefox_dir / "persdict.dat.dicmerge.bak").exists()
 
 
 def test_run_write_back_backup_failure_raises_writeback_error(tmp_path: Path, monkeypatch):
@@ -353,7 +353,7 @@ def test_run_write_back_skips_unreadable_source(tmp_path: Path, monkeypatch):
 
     assert result["write_back_stats"] == {}
     assert ff_file.read_text(encoding="utf-8") == "foo\n"
-    assert not (firefox_dir / "persdict.dat.bak").exists()
+    assert not (firefox_dir / "persdict.dat.dicmerge.bak").exists()
 
 
 def test_run_skips_file_with_nul_bytes(tmp_path: Path):

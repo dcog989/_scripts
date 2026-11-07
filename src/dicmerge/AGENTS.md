@@ -38,18 +38,15 @@ dicmerge, a Python package to scan, merge, and optionally write back custom user
 - Scan enabled sources from config (Codebook, Firefox, Obsidian, LibreOffice, KDE Sonnet, Thunderbird, Vim, Gedit)
 - Deduplicate case-insensitively (first occurrence wins)
 - Output plain text, one word per line, UTF-8
-- Write-back overwrites each source with the merged wordlist, creating a `.bak` backup first
+- Write-back overwrites each source with the merged wordlist, creating a `.dicmerge.bak` backup first
 - Manual execution only, no daemon or scheduler
 
 ### Command Line
 
 ```sh
-dicmerge                      # Write to combined.txt
-dicmerge --write-back         # Write new words back to sources
-dicmerge --dry-run            # Preview only
+dicmerge                      # Preview, then ask to write output and all sources
 dicmerge --list-sources       # Show discovered paths
 dicmerge --version            # Show version
-dicmerge --config custom.yaml # Use alternate config
 ```
 
 ### Exit Codes
