@@ -6,7 +6,7 @@ from pathlib import Path
 from dicmerge.scanner.base import Scanner
 from dicmerge.util import read_text_with_fallback
 
-_WORDS_ARRAY = re.compile(r"(?ms)^words[ \t]*=[ \t]*\[.*?^\]|^words[ \t]*=[ \t]*\[[^\]\n]*\]")
+_WORDS_ARRAY = re.compile(r"(?ms)^words[ \t]*=[ \t]*\[[^\]\n]*\]|^words[ \t]*=[ \t]*\[.*?^\]")
 
 
 class CodebookScanner(Scanner):

@@ -166,6 +166,15 @@ def test_codebook_format_output_preserves_unknown_keys_and_comments(tmp_path: Pa
     assert 'words = [\n    "baz",\n]' in rendered
 
 
+def test_codebook_format_output_replaces_inline_words_array(tmp_path: Path):
+    f = tmp_path / "codebook.toml"
+    f.write_text('words = []\ndictionaries = ["en_us"]\n', encoding="utf-8")
+
+    rendered = CodebookScanner().format_output(f, ["baz"])
+
+    assert rendered == 'words = [\n    "baz",\n]\ndictionaries = ["en_us"]\n'
+
+
 def test_libreoffice_format_output_preserves_header(tmp_path: Path):
     f = tmp_path / "custom.dic"
     f.write_text("OOoUserDict1\nlang: de-DE\ntype: positive\nreplacement: \nHaus\n", encoding="utf-8")
