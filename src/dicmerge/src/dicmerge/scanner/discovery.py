@@ -5,10 +5,12 @@ from pathlib import Path
 from dicmerge.config import Config
 from dicmerge.log import get_logger
 
+_BACKUP_MARKERS = ("-backup", "-back-")
+
 
 def _is_backup(path: Path) -> bool:
     parent = path.parent.name.casefold()
-    if parent.endswith("-backup") or "-backup-crashrecovery-" in parent:
+    if any(marker in parent for marker in _BACKUP_MARKERS):
         return True
     return path.suffix == ".bak"
 
