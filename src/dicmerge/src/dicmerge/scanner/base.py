@@ -8,8 +8,8 @@ class Scanner(ABC):
     skip_header: int = 0
 
     @classmethod
-    @abstractmethod
-    def matches(cls, path: Path) -> bool: ...
+    def matches(cls, path: Path) -> bool:
+        return True
 
     def read(self, path: Path) -> list[str]:
         words: list[str] = []

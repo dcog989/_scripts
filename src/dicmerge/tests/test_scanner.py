@@ -3,7 +3,6 @@ from pathlib import Path
 import pytest
 
 from dicmerge.scanner.codebook import CodebookScanner
-from dicmerge.scanner.firefox import FirefoxScanner
 from dicmerge.scanner.libreoffice import LibreOfficeScanner
 from dicmerge.scanner.plaintext import PlainTextScanner
 
@@ -48,20 +47,6 @@ def test_plaintext_read_latin1_fallback(tmp_path: Path):
     f.write_bytes("café\n".encode("latin1"))
     scanner = PlainTextScanner()
     assert scanner.read(f) == ["café"]
-
-
-def test_firefox_read(tmp_path: Path):
-    f = tmp_path / "persdict.dat"
-    f.write_text("foo\nbar\nbaz\n", encoding="utf-8")
-    scanner = FirefoxScanner()
-    assert scanner.read(f) == ["foo", "bar", "baz"]
-
-
-def test_firefox_does_not_skip_digit_line(tmp_path: Path):
-    f = tmp_path / "persdict.dat"
-    f.write_text("12345\nfoo\n", encoding="utf-8")
-    scanner = FirefoxScanner()
-    assert scanner.read(f) == ["12345", "foo"]
 
 
 HEADER = "OOoUserDict1\nlang: en-US\ntype: positive\nreplacement: \n"

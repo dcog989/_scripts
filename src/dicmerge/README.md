@@ -47,6 +47,8 @@ Written to `~/dicmerge-output/combined.txt` (configurable under `output`): one w
 
 `dicmerge` runs in two phases: preview, then write on confirmation. Each source file is backed up with a `.dicmerge.bak` suffix before it is overwritten.
 
+Filters (`min_length`, `max_length`, `allow_numbers`, `exclude_patterns`) apply to the output file only. Write-back always keeps every scanned word, so filtered words are never deleted from a source. If a dictionary app is running, the preview warns you to close it first.
+
 ---
 
 ## Development
