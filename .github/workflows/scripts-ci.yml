@@ -1,0 +1,28 @@
+name: Scripts CI
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["src/*.fish", "src/*.sh", ".github/workflows/scripts-ci.yml"]
+  pull_request:
+    paths: ["src/*.fish", "src/*.sh", ".github/workflows/scripts-ci.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  syntax:
+    name: Syntax checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install fish
+        run: sudo apt-get update && sudo apt-get install -y fish
+      - name: Bash syntax
+        run: bash -n src/*.sh
+      - name: Fish syntax
+        run: fish -n src/*.fish
