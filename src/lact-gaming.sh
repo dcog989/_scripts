@@ -26,6 +26,7 @@ set -euo pipefail
 # LACT runs the hook as root, so derive the session owner: override, sudo caller, else the logged-in user.
 SESSION_USER="${SESSION_USER:-${SUDO_USER:-$(loginctl --no-legend list-sessions 2>/dev/null | awk '$3 != "root" { print $3; exit }' || true)}}"
 SESSION_USER="${SESSION_USER:-$(id -un)}"
+USER_HOME=$(getent passwd "$SESSION_USER" | cut -d: -f6)
 OUTPUT="DP-1"
 MODE_GAME="3840x2160@240"
 MODE_IDLE="3840x2160@120"
@@ -41,14 +42,19 @@ declare -A APP_MATCH_FLAG=(
 )
 declare -A APP_MATCH_PATTERN=(
     [cliptoo]='cliptoo'
+    # matches both the locally built (~/.local/opt/KopiaUI) and packaged (/opt/KopiaUI) install
     [kopia-ui]='/opt/KopiaUI/'
     [cachy-update]='/usr/lib/arch-update/arch-update-tray'
 )
 declare -A APP_COMMAND=(
     [cliptoo]='/usr/local/bin/cliptoo'
-    [kopia-ui]='/opt/KopiaUI/kopia-ui'
     [cachy-update]='/usr/bin/cachy-update'
 )
+# Prefer the locally built KopiaUI; fall back to the packaged install.
+KOPIA_UI_BIN="$USER_HOME/.local/opt/KopiaUI/kopia-ui"
+[ -x "$KOPIA_UI_BIN" ] || KOPIA_UI_BIN='/opt/KopiaUI/kopia-ui'
+APP_COMMAND[kopia-ui]="$KOPIA_UI_BIN"
+
 APPS=(cliptoo kopia-ui cachy-update)
 
 usage() {
@@ -94,13 +100,7 @@ setup_session_env() {
 }
 
 state_dir() {
-    local home
-    if [ "$(id -u)" -eq 0 ]; then
-        home=$(getent passwd "$SESSION_USER" | cut -d: -f6)
-    else
-        home="$HOME"
-    fi
-    printf '%s\n' "${XDG_STATE_HOME:-$home/.local/state}/lact-gaming"
+    printf '%s\n' "${XDG_STATE_HOME:-$USER_HOME/.local/state}/lact-gaming"
 }
 
 chown_to_user() {
