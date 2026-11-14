@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COG_VERSION: 7.0.0
+
+jobs:
+  release:
+    name: Publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Install cocogitto
+        run: |
+          curl -fsSL "https://github.com/cocogitto/cocogitto/releases/download/${COG_VERSION}/cocogitto-${COG_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin --strip-components=1 x86_64-unknown-linux-musl/cog
+      - name: Check CHANGELOG.md is committed
+        run: |
+          if ! git cat-file -e "${GITHUB_REF_NAME}:CHANGELOG.md"; then
+            echo "CHANGELOG.md is missing at ${GITHUB_REF_NAME}: run 'cog bump' before tagging" >&2
+            exit 1
+          fi
+      - name: Generate release notes
+        run: cog changelog --at "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+      - name: Build source archive
+        run: git archive --format=tar.gz --prefix="${GITHUB_REF_NAME}/" -o "scripts-${GITHUB_REF_NAME}.tar.gz" "$GITHUB_REF_NAME"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "scripts-${GITHUB_REF_NAME}.tar.gz" \
+            CHANGELOG.md \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file "$RUNNER_TEMP/notes.md" \
+            --verify-tag

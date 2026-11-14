@@ -1,0 +1,50 @@
+# Cocogitto: https://docs.cocogitto.io
+# Install the commit-msg hook once per clone: cog install-hook commit-msg
+ignore_merge_commits = true
+tag_prefix = "v"
+
+# Allowed scopes: script or subsystem touched by the commit.
+scopes = [
+    "big-files",
+    "deps",
+    "dicmerge",
+    "file-scans",
+    "flac-conversion",
+    "git-maintenance",
+    "health-check",
+    "install-apps",
+    "lact-gaming",
+    "last-installed",
+    "long-files",
+    "music",
+    "old-files",
+    "opencode-maintenance",
+    "opencode-update",
+    "readme",
+    "refresh",
+    "repoclean",
+    "repository-clean",
+    "scripts",
+    "stale",
+    "update-opencode",
+    # Legacy: one historical commit used two scopes at once; kept so cog check stays green.
+    "big-files,long-files",
+]
+
+[commit_types]
+feat     = { changelog_title = "Features" }
+fix      = { changelog_title = "Bug Fixes" }
+perf     = { changelog_title = "Performance" }
+refactor = { changelog_title = "Refactoring" }
+docs     = { changelog_title = "Documentation" }
+chore    = { changelog_title = "Chores" }
+ci       = { changelog_title = "CI" }
+
+[changelog]
+path = "CHANGELOG.md"
+
+[git_hooks.commit-msg]
+script = """#!/bin/sh
+set -e
+cog verify --file "$1"
+"""
