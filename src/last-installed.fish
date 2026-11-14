@@ -45,15 +45,16 @@ function last-installed --description 'Colourised tail of pacman transactions wi
         # elements can be confused, independent of the terminal theme.
         dim = e "[2m"; rst = e "[0m"
         white = e "[38;2;255;255;255m"  # new-version digits that did not change
+        darkred = e "[38;2;196;115;95m"  # old-version digits that did change; ~4.8:1 on a dark bg
         pink = rgb(240, 101, 149)   # *AUR
         namecol = rgb(77, 171, 247) # package name
         act["upgraded"]    = rgb(81, 207, 102)
         act["installed"]   = rgb(56, 217, 169)
         act["reinstalled"] = rgb(177, 151, 252)
         lvl[1] = rgb(255, 107, 107); name[1] = "major"
-        lvl[2] = rgb(255, 224, 102); name[2] = "minor"
-        lvl[3] = rgb(169, 227, 75);  name[3] = "patch"
-        lvl[4] = rgb(255, 146, 43);  name[4] = "build"
+        lvl[2] = rgb(255, 146, 43);  name[2] = "minor"
+        lvl[3] = rgb(255, 224, 102); name[3] = "patch"
+        lvl[4] = rgb(232, 121, 249); name[4] = "build"
         if (repo_file != "") {
             while ((getline line < repo_file) > 0) {
                 split(line, f, " ")
@@ -101,13 +102,34 @@ function last-installed --description 'Colourised tail of pacman transactions wi
         return out
     }
 
+    function colorize_old(oldv, newv,   po, pn, i, out) {
+        parse(oldv, po); parse(newv, pn)
+        out = ""
+        if (po["epoch"] != "") {
+            if (po["epoch"] != pn["epoch"]) out = out darkred po["epoch"] rst
+            else out = out dim po["epoch"] rst
+            out = out dim ":" rst
+        }
+        for (i = 1; i <= po["n"]; i++) {
+            if (i > 1) out = out dim "." rst
+            if (i in pn && pn[i] == po[i]) { out = out dim po[i] rst; continue }
+            out = out darkred po[i] rst
+        }
+        if (po["rel"] != "") {
+            out = out dim "-" rst
+            if (po["rel"] != pn["rel"]) out = out darkred po["rel"] rst
+            else out = out dim po["rel"] rst
+        }
+        return out
+    }
+
     $3 in act {
         tag = ""; tagcol = dim
         v = $0
         sub(/^[^(]*\(/, "", v); sub(/\).*$/, "", v)
         if ($3 == "upgraded") {
             n = split(v, w, " -> ")
-            body = dim w[1] rst " " dim "→" rst " " colorize(w[1], w[2])
+            body = colorize_old(w[1], w[2]) " " dim "→" rst " " colorize(w[1], w[2])
         } else {
             body = v
         }
