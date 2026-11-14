@@ -1,0 +1,163 @@
+# Changelog
+All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
+
+- - -
+## v0.1.0 - 2026-11-14
+#### Features
+- (**dicmerge**) timestamped output under ~/dicmerge - (128b0cb) - dcog989
+- (**dicmerge**) save a timestamped run report - (f83c050) - dcog989
+- (**dicmerge**) report new words per source on write-back - (aa74093) - dcog989
+- (**dicmerge**) preview and confirm before writing output and sources - (144c2f3) - dcog989
+- (**dicmerge**) add Codebook TOML source - (fbcafb1) - dcog989
+- (**flac-conversion**) report source against output bytes after convert and verify - (3289af7) - dcog989
+- (**flac-conversion**) require bit-identical PCM for tag-only rewrites in verify - (237916c) - dcog989
+- (**flac-conversion**) warn in verify when a converted output reaches full scale - (3179eef) - dcog989
+- (**flac-conversion**) rewrite files with a stray ID3v2 tag, copying tags with metaflac - (236007e) - dcog989
+- (**flac-conversion**) add 16-bit/48 kHz FLAC cap script with scan, convert and verify modes - (5a7de41) - dcog989
+- (**git-maintenance**) make untracking tracked+ignored files opt-in with -u - (daef483) - dcog989
+- (**git-maintenance**) name affected repos in summary report - (da36003) - dcog989
+- (**install-apps**) fail fast when yay is missing - (1e0bf1e) - dcog989
+- (**lact-gaming**) park the Cachy-Update systray applet - (0290fa6) - dcog989
+- (**last-installed**) hyperlink package names to packages.cachyos.org - (f5c3ee8) - dcog989
+- (**last-installed**) mark AUR packages with a pink *AUR tag - (c4b4348) - dcog989
+- (**music**) normalize date tags to a four-digit year - (b2e2f41) - dcog989
+- (**opencode-maintenance**) ask for settings interactively and back up the DB first - (d909263) - dcog989
+- (**opencode-maintenance**) add interactive age-based session pruning - (30d58bf) - dcog989
+- (**scripts**) split file reporters into long-files and size-based big-files - (6a1eb7a) - dcog989
+- (**scripts**) merge git-ignore-tidy into git-maintenance - (775bc95) - dcog989
+- (**scripts**) add lact-gaming hook to switch refresh rate and park tray apps - (1cc3ce6) - dcog989
+- (**stale**) show days-old column, color coded - (9f2a6ec) - dcog989
+- add markdownrs + opencode, refine docs - (6d672d4) - dcog989
+- add cleanup summary to repository-clean - (681df05) - dcog989
+- accept an optional line limit in big-files - (47a0330) - dcog989
+- fall back to paru when yay is unavailable in install-apps - (3d89983) - dcog989
+- add last-installed pacman log viewer - (0a18d30) - dcog989
+- stale.sh, lists untouched content - (ecb0472) - dcog989
+- music tools - (e041dc7) - dcog989
+- system health-check.sh - (6b078c3) - dcog989
+- add opencode-maintenance.sh - (cde8eeb) - dcog989
+- add big-files - (4f54196) - dcog989
+#### Bug Fixes
+- (**big-files**) batch stat calls and use shared grouping - (4bebf26) - dcog989
+- (**big-files**) group by first directory under the given base - (d0ac740) - dcog989
+- (**big-files,long-files**) keep spaces and tabs in reported paths - (94bb05e) - dcog989
+- (**dicmerge**) skip -back- profile backups - (119833f) - dcog989
+- (**dicmerge**) match inline Codebook words arrays - (8f0690f) - dcog989
+- (**dicmerge**) report failures and stop double scanning - (70d743a) - dcog989
+- (**dicmerge**) make write-back lossless - (07b3ae4) - dcog989
+- (**dicmerge**) use SPDX license expression in pyproject - (90bde9a) - dcog989
+- (**flac-conversion**) check resampled levels and close the remaining gaps - (5b19205) - dcog989
+- (**flac-conversion**) copy tags from the source's Vorbis comment block, not ffprobe - (988fb0b) - dcog989
+- (**flac-conversion**) report scan and verify progress per file, not every 500 - (fdbb7fe) - dcog989
+- (**flac-conversion**) drop the trailing ID3v1 tag when only wrappers change - (a24ef67) - dcog989
+- (**flac-conversion**) report the real file size in the truncated-FLAC message - (fa65a8d) - dcog989
+- (**flac-conversion**) compare cover art by block length, not count - (22d8e26) - dcog989
+- (**flac-conversion**) report a malformed job list instead of a traceback - (1194761) - dcog989
+- (**flac-conversion**) refuse scan when --source is not a directory - (834d6d8) - dcog989
+- (**flac-conversion**) fail verify on extra output tags, not only missing ones - (645be14) - dcog989
+- (**flac-conversion**) compare output sample count against the rate-scaled source count in verify - (b111787) - dcog989
+- (**flac-conversion**) check each converted output decodes before renaming it into place - (bee8f14) - dcog989
+- (**flac-conversion**) decode each output with flac -t in verify - (3a3f2dd) - dcog989
+- (**git-maintenance**) report gc failures and batch untracking - (3f99c3d) - dcog989
+- (**git-maintenance**) size the shared object store for worktree repos - (02cf4b4) - dcog989
+- (**git-maintenance**) stop git gc from expiring reflogs - (c387811) - dcog989
+- (**git-maintenance**) call dry-run repos scanned, not optimized - (b1c6cbe) - dcog989
+- (**health-check**) stop double-counting findings - (b003d0d) - dcog989
+- (**health-check**) abort on an invalid ignore regex instead of hiding all findings - (5a51159) - dcog989
+- (**health-check**) run privileged checks as root even with --no-sudo - (e020a51) - dcog989
+- (**health-check**) keep the SMART failure flag per disk - (e46429c) - dcog989
+- (**install-apps**) use pacman -Syu so the install cannot partial-upgrade - (ccd8950) - dcog989
+- (**lact-gaming**) launch the local KopiaUI build, falling back to the packaged one - (ec41bd5) - dcog989
+- (**lact-gaming**) keep state when a parked app fails to restart - (c8571f8) - dcog989
+- (**lact-gaming**) read the session's Wayland socket instead of assuming wayland-0 - (03b58e8) - dcog989
+- (**lact-gaming**) give the fallback launch environment a PATH - (a1ebef8) - dcog989
+- (**lact-gaming**) stop parked apps before switching display mode - (75de4af) - dcog989
+- (**lact-gaming**) launch restored apps with the KDE session environment - (c7434e6) - dcog989
+- (**last-installed**) distinct colors for different elements - (6dee274) - dcog989
+- (**last-installed**) always remove the temp repo list - (3b6b491) - dcog989
+- (**last-installed**) reject a zero count instead of dividing by zero - (606b5e3) - dcog989
+- (**long-files**) skip lock files - (e05bf2e) - dcog989
+- (**long-files**) skip PDF files - (ae1b100) - dcog989
+- (**long-files**) handle a zero line limit and use shared grouping - (b6cac00) - dcog989
+- (**old-files**) parse tab-safe fields - (03a66ed) - dcog989
+- (**opencode-maintenance**) keep age prune inside ROOTS and back up unattended - (d36b922) - dcog989
+- (**opencode-maintenance**) flush the transcript before the script exits - (16ab3ea) - dcog989
+- (**opencode-maintenance**) show dead paths in a dry run - (4e9bffb) - dcog989
+- (**opencode-maintenance**) guard the prune SQL against schema drift - (e84f0d7) - dcog989
+- (**opencode-maintenance**) cap the maintenance transcript like opencode's log - (4b514b4) - dcog989
+- (**opencode-maintenance**) skip schema-dependent steps when a table is missing - (5da4256) - dcog989
+- (**opencode-maintenance**) retarget pruning to session_v2 and vacuum by default - (4689c0f) - dcog989
+- (**opencode-update**) wipe a fixed temp dir so interrupted runs cannot accumulate - (383bcfc) - dcog989
+- (**opencode-update**) gate the up-to-date check on the desktop AppImage too - (0c06ace) - dcog989
+- (**opencode-update**) download both assets before stopping the desktop app - (a6b0cbd) - dcog989
+- (**refresh**) skip user-manager session when resolving root display env - (4cf52d7) - dcog989
+- (**repoclean**) report real reclaimable cache space - (8682263) - dcog989
+- (**repository-clean**) keep orphan configs and clean hidden cache entries - (2b2d71a) - dcog989
+- (**repository-clean**) skip AUR cleanup during a build and stop claiming unverified removals - (d16eb32) - dcog989
+- (**repository-clean**) remove leaked pacman download-* dirs before cache clean - (ac1b527) - dcog989
+- (**repository-clean**) preview the cache prune at the keep count it uses - (ed9cf6e) - dcog989
+- (**repository-clean**) never delete in-flight pacman download dirs - (bcf361d) - dcog989
+- stop hardcoding the local user path and username - (4c70be9) - dcog989
+- narrow the race between checking pacman and removing download dirs - (2c5ada4) - dcog989
+- detect paccache and skip cache prune when missing - (1c2d7a8) - dcog989
+- stop AUR clean from collapsing the keep-3 cache policy - (90e96aa) - dcog989
+- stale uses 90 days - (4abfdf2) - dcog989
+#### Performance
+- (**flac-conversion**) default to 8 workers and parallelise scan and verify - (2ff2f38) - dcog989
+- (**flac-conversion**) copy the audio stream for ID3v2-only rewrites - (24e681a) - dcog989
+- (**git-maintenance**) keep the dry run cheap and move the repack estimate to -e - (eb597d6) - dcog989
+- (**git-maintenance**) read tracked+ignored files in one git call - (c9ddba5) - dcog989
+#### Documentation
+- (**old-files**) use only -d for directory mode - (3de47b1) - dcog989
+- (**readme**) link each Contents entry to its section - (0c11ea5) - dcog989
+- (**readme**) sync script names and symlink install instructions - (9f62d92) - dcog989
+- (**update-opencode**) add function header comment - (38f8a2f) - dcog989
+- describe the prune, backup and cache changes - (f886e25) - dcog989
+- agents.md refined - (39536e6) - dcog989
+- agents.md refined - (4abc70e) - dcog989
+- agents.md refined - (eeefb64) - dcog989
+- tighten README prose to match the terse Contents style - (91d8db1) - dcog989
+- corrected, refined - (83c9c84) - dcog989
+- agents refined - (1bd4c67) - dcog989
+- explain opencode-maintenance settings and fix DO_VACUUM example - (c550cdf) - dcog989
+- tidy, condense - (7d1f8ee) - dcog989
+- readme - remove monitor-refresh - (5ac7eba) - dcog989
+- fix readme instructions to run sh without extension - (c9d1ef6) - dcog989
+- agents.md refined - (1c92238) - dcog989
+- agents.md refined - (511c329) - dcog989
+- sync AGENTS.md key files and monitor-refresh usage with actual scripts - (5d930a1) - dcog989
+- reformat readme - (c93ab67) - dcog989
+- updates for refresh changes - (0cd0705) - dcog989
+#### CI
+- syntax-check the shell and fish scripts - (4b14e3c) - dcog989
+#### Refactoring
+- (**big-files**) give the line threshold a name shared by both awks - (e9423cf) - dcog989
+- (**dicmerge**) drop redundant scanner wrapper - (e4c48e6) - dcog989
+- (**file-scans**) keep big-files and long-files standalone - (d551aec) - dcog989
+- (**file-scans**) add shared project grouping helper - (b04f994) - dcog989
+- (**lact-gaming**) restore captured refresh mode and generalize app table - (704a735) - dcog989
+- (**old-files**) rename from stale, make directory listing opt-in - (43cb7f0) - dcog989
+- (**scripts**) detect text files by content in long-files - (76c19a6) - dcog989
+- (**stale**) port stale.sh to a fish function - (8e1d243) - dcog989
+#### Chores
+- (**deps**) bump astral-sh/setup-uv from 10.3.0 to 10.3.3 - (4416d52) - dependabot[bot]
+- (**dicmerge**) use 3.14 file_digest, Path.move and argparse suggestions - (41b4a4f) - dcog989
+- (**dicmerge**) import standalone project into monorepo - (1cd24be) - dcog989
+- (**music**) delete the unverified 48k mover - (09fb450) - dcog989
+- (**scripts**) add cocogitto config and commit-msg hook - (01801f5) - dcog989
+- gitignore tidy - (317db5b) - dcog989
+- bump v0.7.3 - (359726b) - dcog989
+- bump v0.7.2 - (e02b17d) - dcog989
+- bump v0.7.1 - (80b2c7f) - dcog989
+- delete unused opencode-update.fish - (2ad5fc8) - dcog989
+- delete monitor-refresh.sh, now baked in to lact-gaming - (2251e09) - dcog989
+- rename 'maint' - (72a908a) - dcog989
+- rename repoclean - (d740cda) - dcog989
+- rename update-opencode - (b302d1b) - dcog989
+- format - (b7fe8a4) - dcog989
+- rename refresh.sh - (e576b66) - dcog989
+- initial commit - (c11c722) - dcog989
+
+- - -
+
+Changelog generated by [cocogitto](https://github.com/cocogitto/cocogitto).
