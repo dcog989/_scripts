@@ -3,7 +3,7 @@
 ignore_merge_commits = true
 tag_prefix = "v"
 # cog creates lightweight tags, so --follow-tags would not push the release tag.
-post_bump_hooks = ["git push", "git push origin {{version}}"]
+post_bump_hooks = ["git push", "git push origin v{{version}}"]
 
 # Allowed scopes: script or subsystem touched by the commit.
 scopes = [
