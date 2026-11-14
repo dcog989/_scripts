@@ -17,27 +17,51 @@ function last-installed --description 'Colourised tail of pacman transactions wi
     # Foreign packages (AUR) are those absent from every sync database.
     # shortcut: packages promoted into a repo or dropped from all repos since
     # install are mislabelled; upgrade if pacman ever logs the origin.
+    # Repos are listed in pacman.conf order, so the first hit is the one pacman
+    # would install from (CachyOS v3 rebuilds win over the Arch upstream).
     set -l repo_tmp
     set -l repo_file
     if command -q pacman
         set repo_tmp (mktemp)
-        pacman -Slq 2>/dev/null | sort -u > $repo_tmp
+        pacman -Sl 2>/dev/null | awk '{print $1, $2}' > $repo_tmp
         test -s "$repo_tmp"; and set repo_file $repo_tmp
     end
 
-    awk -v count=$count -v repo_file="$repo_file" '
+    set -l base https://packages.cachyos.org/package/
+    awk -v count=$count -v repo_file="$repo_file" -v base="$base" '
+    function repo_arch(r) {
+        if (r ~ /-v3$/)     return "x86_64_v3"
+        if (r ~ /-v4$/)     return "x86_64_v4"
+        if (r ~ /-znver4$/) return "x86_64_v4"
+        return "x86_64"
+    }
+
+    function rgb(r, g, b) { return "\033[38;2;" r ";" g ";" b "m" }
+
     BEGIN {
         e = "\033"
-        dim = e "[2m"; rst = e "[0m"; bold = e "[1m"; pink = e "[38;5;213m"
-        act["upgraded"]    = e "[1;32m"
-        act["installed"]   = e "[1;36m"
-        act["reinstalled"] = e "[1;35m"
-        lvl[1] = e "[1;31m"; name[1] = "major"
-        lvl[2] = e "[1;33m"; name[2] = "minor"
-        lvl[3] = e "[1;32m"; name[3] = "patch"
-        lvl[4] = e "[1;34m"; name[4] = "build"
+        bs = sprintf("%c", 92)  # backslash; escapes are mangled by the fish quoting layer
+        # Nine hue-distinct truecolor values (~25-70 degrees apart) so no two
+        # elements can be confused, independent of the terminal theme.
+        dim = e "[2m"; rst = e "[0m"
+        white = e "[38;2;255;255;255m"  # new-version digits that did not change
+        pink = rgb(240, 101, 149)   # *AUR
+        namecol = rgb(77, 171, 247) # package name
+        act["upgraded"]    = rgb(81, 207, 102)
+        act["installed"]   = rgb(56, 217, 169)
+        act["reinstalled"] = rgb(177, 151, 252)
+        lvl[1] = rgb(255, 107, 107); name[1] = "major"
+        lvl[2] = rgb(255, 224, 102); name[2] = "minor"
+        lvl[3] = rgb(169, 227, 75);  name[3] = "patch"
+        lvl[4] = rgb(255, 146, 43);  name[4] = "build"
         if (repo_file != "") {
-            while ((getline pkg < repo_file) > 0) repo[pkg] = 1
+            while ((getline line < repo_file) > 0) {
+                split(line, f, " ")
+                if (f[2] in repo) continue
+                repo[f[2]] = 1
+                repo_name[f[2]] = f[1]
+                repo_arch_of[f[2]] = repo_arch(f[1])
+            }
             close(repo_file)
         }
     }
@@ -57,22 +81,22 @@ function last-installed --description 'Colourised tail of pacman transactions wi
         tag = ""; tagcol = dim; out = ""
         if (pn["epoch"] != "") {
             if (pn["epoch"] != po["epoch"]) { out = out lvl[1] pn["epoch"] rst; tag = "epoch"; tagcol = lvl[1] }
-            else out = out dim pn["epoch"] rst
-            out = out dim ":" rst
+            else out = out white pn["epoch"] rst
+            out = out white ":" rst
         }
         for (i = 1; i <= pn["n"]; i++) {
-            if (i > 1) out = out dim "." rst
-            if (i in po && po[i] == pn[i]) { out = out dim pn[i] rst; continue }
+            if (i > 1) out = out white "." rst
+            if (i in po && po[i] == pn[i]) { out = out white pn[i] rst; continue }
             l = (i > 4 ? 4 : i)
             out = out lvl[l] pn[i] rst
             if (tag == "") { tag = name[l]; tagcol = lvl[l] }
         }
         if (pn["rel"] != "") {
-            out = out dim "-" rst
+            out = out white "-" rst
             if (pn["rel"] != po["rel"]) {
                 out = out lvl[4] pn["rel"] rst
                 if (tag == "") { tag = "pkgrel"; tagcol = lvl[4] }
-            } else out = out dim pn["rel"] rst
+            } else out = out white pn["rel"] rst
         }
         return out
     }
@@ -89,8 +113,13 @@ function last-installed --description 'Colourised tail of pacman transactions wi
         }
         if (tag != "") body = body "  " tagcol "(" tag ")" rst
         if (repo_file != "" && !($4 in repo)) body = body " " pink "*AUR" rst
+        pad = (24 > length($4)) ? sprintf("%" (24 - length($4)) "s", "") : ""
+        if ($4 in repo) {
+            url = base repo_name[$4] "/" repo_arch_of[$4] "/" $4
+            cell = namecol e "]8;;" url e bs $4 e "]8;;" e bs pad rst
+        } else cell = namecol $4 pad rst
         buf[cnt % count] = dim substr($1, 2, 10) " " substr($1, 13, 5) rst "  " \
-            act[$3] sprintf("%-11s", $3) rst " " bold sprintf("%-24s", $4) rst "  " body
+            act[$3] sprintf("%-11s", $3) rst " " cell "  " body
         cnt++
     }
 

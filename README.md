@@ -194,7 +194,9 @@ All are environment variables; none are command-line flags.
 
 ## last-installed
 
-Colourized tail of `/var/log/pacman.log`. Actions are colour-coded and labelled `major`, `minor`, `patch`, `build`, `pkgrel` or `epoch`; packages absent from every sync database (AUR/foreign) get a pink `*AUR` marker. Requires `awk` and `pacman`.
+Colorized tail of `/var/log/pacman.log`. Actions are color-coded and labelled `major`, `minor`, `patch`, `build`, `pkgrel` or `epoch`; packages absent from every sync database (AUR/foreign) get a pink `*AUR` marker. Package names are linked (ctrl+click) to their relevant CachyOS package page.
+
+Requires `awk` and `pacman`.
 
 ```sh
 last-installed         # last 50 transactions
