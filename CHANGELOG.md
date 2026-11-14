@@ -2,6 +2,12 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.1.2 - 2026-11-14
+#### Bug Fixes
+- (**cog**) allow the cog scope in the commit allowlist - (a5a88f2) - dcog989
+
+- - -
+
 ## v0.1.1 - 2026-11-14
 #### Bug Fixes
 - (**cog**) push the bump commit and release tag after cog bump - (ee7e817) - dcog989
