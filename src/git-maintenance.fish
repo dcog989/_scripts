@@ -195,9 +195,9 @@ function git-maintenance --description 'Safely optimize all git repos under a di
                 test "$est_b" -lt 0; and set est_b 0
                 set -l est_kb (math "floor($est_b / 1024)")
                 set reclaimable_kb (math "$reclaimable_kb + $est_kb")
-                set est_part "  est.reclaim: "(__gm_human $est_kb)
+                set est_part "  "$gold"est.reclaim: "(__gm_human $est_kb)$off
             end
-            echo "$dim    $name$est_part  loose:$loose/"(__gm_human $loose_kb)" packs:$packs remotes:"(count $remotes)" .git:"(__gm_human $before_kb)$off
+            echo "    $name$est_part  "$dim"loose:$loose/"(__gm_human $loose_kb)" packs:$packs remotes:"(count $remotes)" .git:"(__gm_human $before_kb)$off
             set optimized (math $optimized + 1)
             continue
         end
@@ -227,9 +227,9 @@ function git-maintenance --description 'Safely optimize all git repos under a di
             set fsck_state "$red fsck:ERRORS$off"
             set -a fsck_error_repos "$name"
         else if test $dangling -gt 0
-            set fsck_state "fsck:ok ($dangling dangling)"
+            set fsck_state "$gold fsck:ok ($dangling dangling)$off"
         else
-            set fsck_state "fsck:ok"
+            set fsck_state "$green fsck:ok$off"
         end
 
         # Stats after.
@@ -242,21 +242,29 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         set -l delta (math "$before_kb - $after_kb")
         set reclaimed_kb (math "$reclaimed_kb + $delta")
 
-        echo "$green >$off $name  "(__gm_human $before_kb)" -> "(__gm_human $after_kb)"  ("(__gm_human $delta)")  loose:$loose->$loose2 packs:$packs->$packs2  pruned:$pruned  $fsck_state"
+        # Green when space came back, red when the repo grew, dim when unchanged.
+        set -l delta_color $dim
+        test $delta -gt 0; and set delta_color $green
+        test $delta -lt 0; and set delta_color $red
+        set -l stats "$dim""loose:$loose->$loose2 packs:$packs->$packs2""$off"
+        set -l pruned_state "$dim""pruned:0""$off"
+        test $pruned -gt 0; and set pruned_state "$dim""pruned:""$off$gold$pruned$off"
+
+        echo "$green >$off $name  "$dim(__gm_human $before_kb)" -> "$off(__gm_human $after_kb)"  "$delta_color"("(__gm_human $delta)")"$off"  $stats  $pruned_state  $fsck_state"
 
         set optimized (math $optimized + 1)
     end
 
-    set -l tail "reclaimed: "(__gm_human $reclaimed_kb)
+    set -l tail $dim"reclaimed: "$off$green(__gm_human $reclaimed_kb)$off
     set -l counted optimized
     if test -n "$dry_run"
         set counted scanned
-        set tail "dry run: nothing changed"
-        test -n "$estimate"; and set tail "reclaimable (est.): "(__gm_human $reclaimable_kb)
+        set tail $dim"dry run: nothing changed"$off
+        test -n "$estimate"; and set tail $dim"reclaimable (est.): "$off$gold(__gm_human $reclaimable_kb)$off
     end
     echo
     echo $green"$counted: "$off$optimized"   "$gold"skipped: "$off$skipped"   "$dim"discovered: "$off$total"   "$tail
-    test $pruned_total -gt 0; and echo $dim"remote refs pruned: "$off$pruned_total
+    test $pruned_total -gt 0; and echo $dim"remote refs pruned: "$off$gold$pruned_total$off
 
     set -l untrack_state "left tracked; pass -u to untrack"
     test -n "$untrack"; and set untrack_state "staged for untracking; commit each repo to apply"
