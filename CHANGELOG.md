@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.2.0 - 2026-11-15
+#### Features
+- (**git-maintenance**) color-code per-repo output - (aa49031) - dcog989
+#### Bug Fixes
+- (**git-maintenance**) let gc reclaim commits discarded by reset/amend/rebase - (175a4e3) - dcog989
+- (**opencode-maintenance**) match bare opencode processes, drop legacy message/part rows, sweep uncascaded orphans, count - (0566946) - dcog989
+- (**repository-clean**) report failure when AUR dep removal exits non-zero - (f196720) - dcog989
+
+- - -
+
 ## v0.1.2 - 2026-11-14
 #### Bug Fixes
 - (**cog**) allow the cog scope in the commit allowlist - (a5a88f2) - dcog989
