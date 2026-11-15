@@ -1,8 +1,10 @@
 # Safe git maintenance for every repo under a directory tree.
 #
-# It never touches the working tree, uses no `git clean`, never expires reflogs
-# (reflogExpire/reflogExpireUnreachable are pinned to never), and never deletes
-# branches, tags, stashes or remotes. Only `-a` passes `--prune=now`.
+# It never touches the working tree, uses no `git clean`, and never deletes
+# branches, tags, stashes or remotes. Reflog entries for reachable commits are
+# kept forever; entries for unreachable commits (discarded by reset, amend or
+# rebase) expire after 90 days so gc can reclaim that space. Only `-a` passes
+# `--prune=now`.
 #
 # Files that are both tracked and ignored (a tracked file listed in .gitignore is
 # usually a mistake) are always reported, but only untracked when -u is passed.
@@ -68,9 +70,10 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         echo "$red!$off aggressive mode: adding --aggressive --prune=now (much slower, no recovery grace)$off"
     end
 
-    # `git gc` runs `git reflog expire --all` at git's default ages (90/30 days);
-    # pin both to never so old recovery points stay reachable, as promised.
-    set -l keep_reflog -c gc.reflogExpire=never -c gc.reflogExpireUnreachable=never
+    # `git gc` runs `git reflog expire --all` at git's default ages (90/30 days).
+    # Keep reachable history forever; give discarded commits the same 90 days of
+    # recovery, after which their objects become reclaimable.
+    set -l keep_reflog -c gc.reflogExpire=never -c gc.reflogExpireUnreachable=90.days.ago
     set -l gc_flags --quiet
     if test -n "$aggressive"
         set -a gc_flags --aggressive --prune=now
@@ -202,7 +205,7 @@ function git-maintenance --description 'Safely optimize all git repos under a di
         # Optimize (working tree is never touched).
         set -l pruned 0
         for remote in $remotes
-            set -l pout (env GIT_TERMINAL_PROMPT=0 git -C "$repo" remote prune "$remote" 2>&1)
+            set -l pout (env LC_ALL=C GIT_TERMINAL_PROMPT=0 git -C "$repo" remote prune "$remote" 2>&1)
             set pruned (math $pruned + (count (string match -r '\[pruned\]' -- $pout)))
         end
         set pruned_total (math $pruned_total + $pruned)
@@ -212,7 +215,6 @@ function git-maintenance --description 'Safely optimize all git repos under a di
             set skipped (math $skipped + 1)
             continue
         end
-        git -C "$repo" commit-graph write --reachable >/dev/null 2>&1
         if test "$has_midx" = true
             if not git -C "$repo" repack --write-midx=incremental --quiet >/dev/null 2>&1
                 echo "$gold !$off $name $gold(repack --write-midx failed; gc ok)$off"
