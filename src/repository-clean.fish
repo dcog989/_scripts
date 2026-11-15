@@ -4,11 +4,22 @@
 # Usage:
 #   repository-clean
 #
-# The package cache report previews what cleanup reclaims: cached versions
-# beyond the keep-3 prune, plus every cached version of an uninstalled package.
-# Cleanup prompts once before making any changes and ends with a summary of
-# what was actually removed.
+# The report previews what cleanup would reclaim: cached versions beyond the
+# keep-3 prune, cached versions of uninstalled packages, stale download dirs and
+# the AUR build cache. It ends with a one-line verdict; with nothing to reclaim
+# it says so and returns without prompting. Otherwise it prompts once before
+# making any changes and ends with a summary of what was actually removed.
 #
+function __rc_count --description 'colour a count: green when nonzero, dim when zero'
+    set -l n $argv[1]
+    test -n "$n"; or set n 0
+    if test "$n" -gt 0
+        echo (set_color green)$n(set_color normal)
+    else
+        echo (set_color brblack)$n(set_color normal)
+    end
+end
+
 function repository-clean --description 'List then clean pacman/AUR package leftovers'
     set -l sec (set_color --bold yellow)
     set -l ok (set_color green)
@@ -32,34 +43,69 @@ function repository-clean --description 'List then clean pacman/AUR package left
     echo $sec"================ Package maintenance ================"$off
 
     echo
-    echo $sec"Orphans"$off" (pacman -Qdtq)"
+    echo $sec"Orphans"$off$dim" (pacman -Qdtq)"$off
     set -l orphans (pacman -Qdtq 2>/dev/null)
     if test -z "$orphans"
         echo "  "$ok"none"$off
     else
         echo "  "$bad(count $orphans)" found"$off
-        pacman -Qdt | sed 's/^/    /'
+        pacman -Qdt | while read -l name ver
+            echo "    "$bad$name$off" "$dim$ver$off
+        end
     end
 
     echo
-    echo $sec"Explicitly installed"$off" (pacman -Qe | wc -l)"
-    echo "  "$dim"count: "$off(pacman -Qe | wc -l)
-
-    echo
-    echo $sec"Package cache"$off" (/var/cache/pacman/pkg)"
-    echo "  "$dim"total size:    "$off(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
+    echo $sec"Package cache"$off$dim" (/var/cache/pacman/pkg)"$off
+    echo "  "$dim"total size:     "$off(du -sh /var/cache/pacman/pkg 2>/dev/null | cut -f1)
+    # Parse paccache's own dry run so the preview says whether a prune would
+    # reclaim anything, instead of echoing its raw output.
+    set -l n_old 0
+    set -l n_gone 0
+    set -l free_old
+    set -l free_gone
     if test -n "$paccache"
-        echo "  "$dim"old versions:  "$off(paccache -d -k $keep 2>/dev/null | tail -1)
-        echo "  "$dim"uninstalled:   "$off(paccache -d -u -k 0 2>/dev/null | tail -1)
+        set -l out (paccache -d -k $keep 2>/dev/null | tail -1)
+        set n_old (string match -r --groups-only '(\d+) candidates' -- $out | head -1)
+        set free_old (string match -r --groups-only 'saved: ([^)]+)' -- $out | head -1)
+        set -l out (paccache -d -u -k 0 2>/dev/null | tail -1)
+        set n_gone (string match -r --groups-only '(\d+) candidates' -- $out | head -1)
+        set free_gone (string match -r --groups-only 'saved: ([^)]+)' -- $out | head -1)
+        # An empty list disappears from a concatenated echo argument, so default
+        # every parsed value to something printable.
+        test -z "$n_old"; and set n_old 0
+        test -z "$free_old"; and set free_old ''
+        test -z "$n_gone"; and set n_gone 0
+        test -z "$free_gone"; and set free_gone ''
+        echo "  "$dim"superseded:     "$off(__rc_count $n_old)" "$dim$free_old$off
+        echo "  "$dim"uninstalled:    "$off(__rc_count $n_gone)" "$dim$free_gone$off
     else
         echo "  "$bad"paccache not installed - cache prune skipped"$off
     end
+    set -l n_dl (find /var/cache/pacman/pkg -maxdepth 1 -type d -name 'download-*' 2>/dev/null | count)
+    echo "  "$dim"stale downloads: "$off(__rc_count $n_dl)
 
+    set -l aur_mb 0
     if test -n "$aur"
         echo
-        echo $sec"AUR build cache"$off" (~/.cache/$aur)"
+        echo $sec"AUR build cache"$off$dim" (~/.cache/$aur)"$off
         echo "  "$dim"total size: "$off(du -sh ~/.cache/$aur 2>/dev/null | cut -f1)
+        set aur_mb (du -sm ~/.cache/$aur 2>/dev/null | cut -f1)
+        test -z "$aur_mb"; and set aur_mb 0
     end
+
+    set -l todo
+    test -n "$orphans"; and set -a todo (count $orphans)" orphaned package(s)"
+    test $n_old -gt 0; and set -a todo "$n_old superseded package version(s)"
+    test $n_gone -gt 0; and set -a todo "$n_gone cached package(s) no longer installed"
+    test $n_dl -gt 0; and set -a todo "$n_dl stale download dir(s)"
+    test $aur_mb -gt 0; and set -a todo "$aur_mb MiB AUR build cache"
+
+    echo
+    if test -z "$todo"
+        echo $ok"Nothing to clean."$off
+        return 0
+    end
+    echo $sec"Cleanup will remove: "$off(string join ', ' -- $todo)
 
     echo
     read -l ans -P "Run cleanup? [y/N] "
@@ -109,7 +155,9 @@ function repository-clean --description 'List then clean pacman/AUR package left
             echo "  "$dim"nothing to clean"$off
         end
         if string match -qi '*error*' -- $res ''
-            printf '%s\n' $res | string match -i '*error*'
+            printf '%s\n' $res | string match -i '*error*' | while read -l l
+                echo "    "$bad$l$off
+            end
         end
 
         echo $sec"== Removing uninstalled from cache =="$off
@@ -122,7 +170,9 @@ function repository-clean --description 'List then clean pacman/AUR package left
             echo "  "$dim"nothing to clean"$off
         end
         if string match -qi '*error*' -- $res ''
-            printf '%s\n' $res | string match -i '*error*'
+            printf '%s\n' $res | string match -i '*error*' | while read -l l
+                echo "    "$bad$l$off
+            end
         end
     else
         echo $dim"Skipping cache prune: paccache not installed"$off
@@ -176,14 +226,17 @@ function repository-clean --description 'List then clean pacman/AUR package left
 
             echo $sec"== Removing unneeded deps =="$off
             set -l before (count (pacman -Qdtq 2>/dev/null))
+            set -l deps_ok 0
             switch $aur
                 case yay
-                    yay -Yc --noconfirm
+                    yay -Yc --noconfirm; and set deps_ok 1
                 case paru
-                    paru -c --noconfirm
+                    paru -c --noconfirm; and set deps_ok 1
             end
             set n_aur_deps (math $before - (count (pacman -Qdtq 2>/dev/null)))
-            if test $n_aur_deps -gt 0
+            if test $deps_ok = 0
+                echo "  "$bad"dep removal failed - see the output above"$off
+            else if test $n_aur_deps -gt 0
                 echo "  "$ok"removed $n_aur_deps unneeded dep(s)"$off
             else
                 echo "  "$dim"nothing to remove"$off
@@ -206,13 +259,13 @@ function repository-clean --description 'List then clean pacman/AUR package left
 
     echo
     echo $sec"== Summary =="$off
-    echo "  "$dim"orphaned packages removed:   "$off$n_orphans
-    echo "  "$dim"cache versions pruned:       "$off$n_pruned
-    echo "  "$dim"uninstalled pkgs dropped:    "$off$n_uninstalled
-    echo "  "$dim"stale download dirs removed: "$off$n_dldirs" ("$dldirs_mb" MiB)"$off
-    echo "  "$dim"AUR build files removed:     "$off$n_aur_files
-    echo "  "$dim"unneeded AUR deps removed:   "$off$n_aur_deps
-    echo "  "$dim"space reclaimed:             "$off$freed_cache" MiB pacman cache, "(math $aur_before - $aur_after)" MiB AUR cache"
+    echo "  "$dim"orphaned packages removed:   "$off(__rc_count $n_orphans)
+    echo "  "$dim"cache versions pruned:       "$off(__rc_count $n_pruned)
+    echo "  "$dim"uninstalled pkgs dropped:    "$off(__rc_count $n_uninstalled)
+    echo "  "$dim"stale download dirs removed: "$off(__rc_count $n_dldirs)" ("$dim$dldirs_mb" MiB"$off")"
+    echo "  "$dim"AUR build files removed:     "$off(__rc_count $n_aur_files)
+    echo "  "$dim"unneeded AUR deps removed:   "$off(__rc_count $n_aur_deps)
+    echo "  "$dim"space reclaimed:             "$off(__rc_count $freed_cache)" MiB pacman cache, "$dim(math $aur_before - $aur_after)" MiB AUR cache"$off
 
     echo $ok'Done.'$off
 end
