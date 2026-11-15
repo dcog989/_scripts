@@ -7,14 +7,16 @@
 #  1. Prune OpenCode SQLite rows whose project directory no longer exists
 #     (prevents "Failed to send prompt / Unable to retrieve session").
 #     A path must be missing for DEAD_GRACE_DAYS before it is pruned.
-#  2. Drop the frozen legacy session/message/part rows that OpenCode migrated
-#     to session_v2/session_message (only rows mirrored in session_v2).
+#  2. Drop the frozen legacy session rows that OpenCode migrated to session_v2
+#     (only rows whose id also exists in session_v2, so no history is lost).
 #  3. Back up the DB (gzipped) to ~/Downloads before anything is written.
 #  4. Optionally prune sessions with no activity for SESSION_MAX_AGE_DAYS.
-#  5. Delete snapshot/<project-id>/ git dirs for projects no longer in the DB.
-#  6. Rotate/truncate opencode.log and this script's own maintenance.log when
+#  5. Sweep rows no cascading FK covers: legacy message/part, todo, job and
+#     content-addressed blobs left behind by the deletes above.
+#  6. Delete snapshot/<project-id>/ git dirs for projects no longer in the DB.
+#  7. Rotate/truncate opencode.log and this script's own maintenance.log when
 #     they grow past LOG_MAX_MB.
-#  7. VACUUM the DB.
+#  8. VACUUM the DB.
 #
 # Run from a terminal it asks four questions up front (backup, dead-path grace,
 # session age, VACUUM) and Enter accepts the default. With no tty - cron or
@@ -79,11 +81,28 @@ rotate_log() {
   : > "$f"
 }
 
-exec > >(tee -a "$MAINT_LOG") 2>&1
+# Colour is for a real terminal only: once tee owns stdout it is a pipe, and a
+# cron/systemd run must not carry escape codes. The terminal copy keeps them;
+# the transcript on disk is stripped as it is written, so it stays greppable.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+  C_OFF=$'\033[0m' C_DIM=$'\033[90m' C_OK=$'\033[32m'
+  C_WARN=$'\033[33m' C_ERR=$'\033[1;31m' C_DRY=$'\033[36m'
+else
+  C_OFF='' C_DIM='' C_OK='' C_WARN='' C_ERR='' C_DRY=''
+fi
+
+exec > >(tee >(sed -u 's/\x1b\[[0-9;]*m//g' >> "$MAINT_LOG")) 2>&1
 # process substitution is not waited for: close the pipe so tee flushes the last
 # lines into the transcript before the script (or a systemd scope) goes away
 trap 'exec 1>&- 2>&-; wait' EXIT
-log() { printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*"; }
+
+# one line per event: dim timestamp, then the message in its severity colour
+_emit() { printf '%s%s%s %s%s\n' "$C_DIM" "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$C_OFF" "$*" "$C_OFF"; }
+log() { _emit "$*"; }            # neutral: choices, counts, notes
+ok() { _emit "$C_OK$*"; }        # something was done
+warn() { _emit "$C_WARN$*"; }    # skipped or degraded
+err() { _emit "$C_ERR$*"; }      # failed
+dry() { _emit "$C_DRY$*"; }      # dry-run plan: would have done this
 
 # This transcript only grows a line or two per run, but it is still unbounded;
 # cap it with the same thresholds as opencode's own log.
@@ -93,10 +112,10 @@ if [ "$LOG_MAX_MB" -gt 0 ] && [ -f "$MAINT_LOG" ]; then
 fi
 if [ "$maint_mb" -gt 0 ] && [ "$maint_mb" -ge "$LOG_MAX_MB" ]; then
   if [ "$DRY_RUN" = "1" ]; then
-    log "DRY RUN - would rotate maintenance log (${maint_mb}MB >= ${LOG_MAX_MB}MB)"
+    dry "DRY RUN - would rotate maintenance log (${maint_mb}MB >= ${LOG_MAX_MB}MB)"
   else
     rotate_log "$MAINT_LOG" "$LOG_KEEP"
-    log "rotated maintenance log (${maint_mb}MB) -> $(basename "$MAINT_LOG").1.gz"
+    ok "rotated maintenance log (${maint_mb}MB) -> $(basename "$MAINT_LOG").1.gz"
   fi
 fi
 
@@ -127,15 +146,15 @@ backup_db() {
   local tmp="$TMPD/backup.db" dest old
   dest="$BACKUP_DIR/opencode-db-$(date +%Y%m%d-%H%M%S).db.gz"
   if ! sqlite3 "$DB" ".backup '$tmp'"; then
-    log "backup failed - aborting before any write"
+    err "backup failed - aborting before any write"
     exit 1
   fi
   if ! gzip -c "$tmp" > "$dest"; then
     rm -f "$dest"
-    log "backup failed - no space in $BACKUP_DIR? aborting before any write"
+    err "backup failed - no space in $BACKUP_DIR? aborting before any write"
     exit 1
   fi
-  log "backup: $dest ($(hr "$(stat -c %s "$dest")"))"
+  ok "backup: $dest ($(hr "$(stat -c %s "$dest")"))"
   while IFS= read -r old; do
     rm -f -- "$old"; log "backup: removed old $(basename "$old")"
   done < <(ls -1t "$BACKUP_DIR"/opencode-db-*.db.gz 2>/dev/null | tail -n +$(( BACKUP_KEEP + 1 )))
@@ -146,7 +165,7 @@ db_reclaim=0 snap_bytes=0 log_bytes=0
 
 # single instance
 exec 9>"$STATE_DIR/.lock"
-flock -n 9 || { log "another run in progress"; exit 0; }
+flock -n 9 || { warn "another run in progress"; exit 0; }
 
 # scratch space for the pre-write DB copy and the prune lists; cleared on exit,
 # including Ctrl-C, but deliberately not /tmp - that is tmpfs here and the copy
@@ -154,8 +173,11 @@ flock -n 9 || { log "another run in progress"; exit 0; }
 TMPD=$(mktemp -d -p "$STATE_DIR" maint.XXXXXX)
 trap 'rm -rf "$TMPD"; exec 1>&- 2>&-; wait' EXIT
 
+# argv[0] is the command as typed, so a TUI started as `opencode` (or
+# `opencode --standalone`, which runs its own server) never appears as a path.
+# Match the bare name and any path form, plus both desktop bundle names.
 oc_running() {
-  pgrep -af 'opencode-desktop|ai\.opencode\.desktop|/bin/opencode( |$)|opencode serve' >/dev/null
+  pgrep -f '(^|/)(opencode|opencode-cli)( |$)|opencode-desktop|ai\.opencode\.desktop' >/dev/null
 }
 
 under_roots() {
@@ -179,7 +201,7 @@ column_exists() {
 
 # ------------------------------------------------------------------- choices
 if [ -t 0 ] && [ "$DRY_RUN" != "1" ]; then
-  if oc_running; then log "warning: OpenCode is running - DB backup, prune and VACUUM will be skipped"; fi
+  if oc_running; then warn "warning: OpenCode is running - DB backup, prune and VACUUM will be skipped"; fi
   [ -n "$BACKUP" ] || ask_yn BACKUP "Back up the DB to $BACKUP_DIR (keep $BACKUP_KEEP)" y
   [ -n "$DEAD_GRACE_DAYS" ] || ask_num DEAD_GRACE_DAYS "Days a missing project path must stay gone before pruning" 7
   [ -n "$SESSION_MAX_AGE_DAYS" ] || ask_num SESSION_MAX_AGE_DAYS "Prune sessions inactive longer than (days, 0 = never)" 60
@@ -203,11 +225,11 @@ if [ "$LOG_MAX_MB" -gt 0 ] && [ -f "$LOG" ]; then
   size_mb=$(( $(stat -c %s "$LOG") / 1048576 ))
   if [ "$size_mb" -ge "$LOG_MAX_MB" ]; then
     if [ "$DRY_RUN" = "1" ]; then
-      log "DRY RUN - would rotate log (${size_mb}MB >= ${LOG_MAX_MB}MB)"
+      dry "DRY RUN - would rotate log (${size_mb}MB >= ${LOG_MAX_MB}MB)"
     else
       log_bytes=$(( size_mb * 1048576 ))
       rotate_log "$LOG" "$LOG_KEEP"
-      log "rotated log (${size_mb}MB) -> $(basename "$LOG").1.gz"
+      ok "rotated log (${size_mb}MB) -> $(basename "$LOG").1.gz"
     fi
   else
     log "log ${size_mb}MB < ${LOG_MAX_MB}MB"
@@ -215,17 +237,17 @@ if [ "$LOG_MAX_MB" -gt 0 ] && [ -f "$LOG" ]; then
 fi
 
 # ------------------------------------------------------------------ db prune
-[ -f "$DB" ] || { log "no db at $DB"; exit 0; }
+[ -f "$DB" ] || { warn "no db at $DB"; exit 0; }
 db_size_before=$(stat -c %s "$DB")
 skip_db=0
-if oc_running; then log "OpenCode running - skipping DB prune"; skip_db=1; fi
+if oc_running; then warn "OpenCode running - skipping DB prune"; skip_db=1; fi
 
 # ---------------------------------------------------------------- db backup
 if [ "$BACKUP" = "1" ]; then
   if [ "$skip_db" = 1 ]; then
-    log "backup skipped - OpenCode running"
+    warn "backup skipped - OpenCode running"
   elif [ "$DRY_RUN" = "1" ]; then
-    log "DRY RUN - would back up $DB to $BACKUP_DIR"
+    dry "DRY RUN - would back up $DB to $BACKUP_DIR"
   else
     mkdir -p "$BACKUP_DIR"
     backup_db
@@ -259,11 +281,11 @@ while IFS= read -r p; do
   grep -qF "$(printf '%s\t' "$p")" "$newstate" || printf '%s\t%s\n' "$p" "$now" >> "$newstate"
 done < "$tmp"
 if [ "$DRY_RUN" = "1" ]; then
-  log "DRY RUN - would record $(wc -l < "$newstate") dead paths"
+  dry "DRY RUN - would record $(wc -l < "$newstate") dead paths"
   # A dry run never writes the state file, so a fresh state has nothing ripe;
   # list the candidates so the preview still shows what is being tracked.
   if [ -s "$tmp" ]; then
-    log "DRY RUN - missing paths under ROOTS (grace ${DEAD_GRACE_DAYS}d before any is pruned):"
+    dry "DRY RUN - missing paths under ROOTS (grace ${DEAD_GRACE_DAYS}d before any is pruned):"
     sed 's/^/  /' "$tmp"
   fi
 else
@@ -281,7 +303,7 @@ log "dead candidates: $(wc -l < "$tmp"), ripe: $(wc -l < "$ripe") (grace ${DEAD_
 # the dry-run branch only prints, so it may run while OpenCode is open
 if [ -s "$ripe" ] && { [ "$DRY_RUN" = 1 ] || [ "$skip_db" = 0 ]; }; then
   if [ "$DRY_RUN" = "1" ]; then
-    log "DRY RUN - would prune paths:"; sed 's/^/  /' "$ripe"
+    dry "DRY RUN - would prune paths:"; sed 's/^/  /' "$ripe"
   else
     sqlite3 "$DB" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null
     out=$(python3 - "$DB" "$ripe" <<'PY'
@@ -324,18 +346,19 @@ PY
     rc=$(printf '%s\n' "$out" | sed -n 's/^reclaim=//p')
     # each reading is the running freelist total, so it replaces the previous one
     db_reclaim=${rc:-$db_reclaim}
-    log "$(printf '%s\n' "$out" | grep -v '^reclaim=' | paste -sd'; ' -)"
+    ok "$(printf '%s\n' "$out" | grep -v '^reclaim=' | paste -sd'; ' -)"
     awk -F'\t' -v r="$ripe" '
       NR==FNR { dead[$1]=1; next }
       !($1 in dead)' "$ripe" "$STATE_FILE" > "$STATE_FILE.new" && mv "$STATE_FILE.new" "$STATE_FILE"
-    log "db prune complete"
+    ok "db prune complete"
   fi
 fi
 
 # --------------------------------------------------------------- legacy tables
 # OpenCode migrated session/message/part to session_v2/session_message; the old
 # tables are frozen mirrors. Only rows also in session_v2 are dropped, so no
-# history is lost; the FK cascade clears their message/part rows.
+# history is lost. message/part carry no foreign key in either schema, so their
+# rows for those sessions are deleted explicitly in the same step.
 if [ "$skip_db" = 0 ]; then
   if ! table_exists session || ! table_exists session_v2; then
     log "legacy session tables absent - nothing to drop"
@@ -343,12 +366,21 @@ if [ "$skip_db" = 0 ]; then
     n_mirror=$(sqlite3 "$DB" "SELECT count(*) FROM session WHERE id IN (SELECT id FROM session_v2);")
     if [ "$n_mirror" -gt 0 ]; then
       if [ "$DRY_RUN" = "1" ]; then
-        log "DRY RUN - would drop $n_mirror legacy session rows mirrored in session_v2"
+        dry "DRY RUN - would drop $n_mirror legacy session rows mirrored in session_v2"
       else
-        sqlite3 "$DB" "PRAGMA foreign_keys=ON; DELETE FROM session WHERE id IN (SELECT id FROM session_v2);"
+        # message/part are V1 tables with no FK, so their rows are dropped by
+        # explicit statement (before the session row, which the subqueries read).
+        legacy_sql="DELETE FROM session WHERE id IN (SELECT id FROM session_v2)"
+        if table_exists part; then
+          legacy_sql="DELETE FROM part WHERE session_id IN (SELECT id FROM session WHERE id IN (SELECT id FROM session_v2)); $legacy_sql"
+        fi
+        if table_exists message; then
+          legacy_sql="DELETE FROM message WHERE session_id IN (SELECT id FROM session WHERE id IN (SELECT id FROM session_v2)); $legacy_sql"
+        fi
+        sqlite3 "$DB" "PRAGMA foreign_keys=ON; $legacy_sql;"
         ps=$(sqlite3 "$DB" "PRAGMA page_size;")
         db_reclaim=$(( $(sqlite3 "$DB" "PRAGMA freelist_count;") * ps ))
-        log "legacy prune: dropped $n_mirror mirrored session rows; $(sqlite3 "$DB" "SELECT count(*) FROM session;") legacy sessions left"
+        ok "legacy prune: dropped $n_mirror mirrored session rows; $(sqlite3 "$DB" "SELECT count(*) FROM session;") legacy sessions left"
       fi
     else
       log "no legacy session rows to drop"
@@ -419,7 +451,7 @@ if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && c
   log "sessions inactive >${age_days}d under ROOTS: $n_old"
   if [ "$n_old" -gt 0 ]; then
     if [ "$DRY_RUN" = "1" ]; then
-      log "DRY RUN - would prune $n_old sessions older than ${age_days}d"
+      dry "DRY RUN - would prune $n_old sessions older than ${age_days}d"
     else
       proceed=1
       if [ "$ASSUME_YES" != "1" ]; then
@@ -428,7 +460,7 @@ if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && c
           read -r reply || reply=""
           case "$reply" in y|Y|yes|YES) ;; *) proceed=0;; esac
         else
-          log "no tty and ASSUME_YES != 1 - skipping age prune"
+          warn "no tty and ASSUME_YES != 1 - skipping age prune"
           proceed=0
         fi
       fi
@@ -436,9 +468,59 @@ if [ "$skip_db" = 0 ] && [ "${SESSION_MAX_AGE_DAYS:-0}" -gt 0 ] 2>/dev/null && c
         out=$(age_prune delete "$cutoff_ms")
         rc=$(printf '%s\n' "$out" | sed -n 's/^reclaim=//p')
         db_reclaim=${rc:-$db_reclaim}
-        log "pruned sessions older than ${age_days}d: $(printf '%s\n' "$out" | grep -v '^reclaim=' | paste -sd'; ' -)"
+        ok "pruned sessions older than ${age_days}d: $(printf '%s\n' "$out" | grep -v '^reclaim=' | paste -sd'; ' -)"
       fi
     fi
+  fi
+fi
+
+# --------------------------------------------------------------- orphan sweep
+# Rows no cascading FK covers: `todo` still points at the legacy session table,
+# `job` has no FK at all, `blob` is only cascaded *to* (deleting a blob_ref does
+# not delete its blob), and legacy message/part have no FKs either. One sweep
+# after every delete path keeps all of them from accumulating.
+# instruction_blob is left alone: nothing references it by column, so the only
+# way to tell a live row from a dead one is the JSON inside instruction_entry.
+if [ "$skip_db" = 0 ]; then
+  sweep=$(python3 - "$DB" "$DRY_RUN" <<'PY'
+import sqlite3, sys
+
+db, dry = sys.argv[1], sys.argv[2] == "1"
+con = sqlite3.connect(db)
+tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+def cols(t): return {r[1] for r in con.execute(f"PRAGMA table_info('{t}')")}
+def has(t, *names): return t in tables and all(n in cols(t) for n in names)
+
+live = " UNION ".join(f"SELECT id FROM {t}" for t in ("session", "session_v2") if t in tables)
+targets = []
+if live:
+    targets += [(t, f"session_id NOT IN ({live})")
+                for t in ("todo", "job", "message", "part") if has(t, "session_id")]
+if has("blob", "hash") and has("blob_ref", "hash"):
+    targets.append(("blob", "hash NOT IN (SELECT hash FROM blob_ref)"))
+
+found = {}
+for t, where in targets:
+    n = con.execute(f"SELECT count(*) FROM {t} WHERE {where}").fetchone()[0]
+    if n:
+        found[t] = n
+if dry or not found:
+    print(" ".join(f"{t}={n}" for t, n in found.items()) or "none")
+    sys.exit(0)
+con.execute("PRAGMA foreign_keys=ON")
+con.execute("BEGIN")
+for t, where in targets:
+    con.execute(f"DELETE FROM {t} WHERE {where}")
+con.commit()
+con.execute("PRAGMA optimize")
+print(" ".join(f"{t}={n}" for t, n in found.items()))
+con.close()
+PY
+)
+  if [ "$DRY_RUN" = "1" ]; then
+    dry "DRY RUN - would sweep orphan rows: $sweep"
+  else
+    ok "orphan sweep: $sweep"
   fi
 fi
 
@@ -447,16 +529,20 @@ fi
 # from earlier runs are compacted in one go.
 if [ "$DO_VACUUM" = "1" ]; then
   if [ "$skip_db" = 1 ]; then
-    log "VACUUM skipped - OpenCode running (needs an exclusive lock)"
+    warn "VACUUM skipped - OpenCode running (needs an exclusive lock)"
   elif [ "$DRY_RUN" = "1" ]; then
-    log "DRY RUN - would VACUUM $DB"
+    dry "DRY RUN - would VACUUM $DB"
   elif sqlite3 "$DB" "VACUUM;"; then
-    log "VACUUM complete"
+    ok "VACUUM complete"
   else
-    log "VACUUM failed"
+    err "VACUUM failed"
   fi
 fi
 
+# WAL pages are not part of the .db file, so fold them back in before measuring.
+if [ "$skip_db" = 0 ] && [ "$DRY_RUN" != "1" ]; then
+  sqlite3 "$DB" "PRAGMA wal_checkpoint(TRUNCATE);" >/dev/null 2>&1 || true
+fi
 db_size_after=$(stat -c %s "$DB")
 
 # ------------------------------------------------------------------ snapshots
@@ -478,11 +564,11 @@ else
   if [ -s "$orphans" ]; then
     while IFS= read -r d; do s=$(dir_bytes "$d"); snap_bytes=$((snap_bytes+${s:-0})); done < "$orphans"
     if [ "$DRY_RUN" = "1" ]; then
-      log "DRY RUN - would delete $(wc -l < "$orphans") orphan snapshot dirs ($(hr "$snap_bytes")):"
+      dry "DRY RUN - would delete $(wc -l < "$orphans") orphan snapshot dirs ($(hr "$snap_bytes")):"
       sed 's/^/  /' "$orphans"
     else
       while IFS= read -r d; do rm -rf -- "$d"; done < "$orphans"
-      log "deleted $(wc -l < "$orphans") orphan snapshot dirs ($(hr "$snap_bytes"))"
+      ok "deleted $(wc -l < "$orphans") orphan snapshot dirs ($(hr "$snap_bytes"))"
     fi
   else
     log "no orphan snapshot dirs"
@@ -494,4 +580,4 @@ db_saved=$(( db_size_before - db_size_after )); [ "$db_saved" -lt 0 ] && db_save
 # db_reclaim is the pre-VACUUM freelist: reusable, not freed. The file delta is
 # the only reclaimed DB space; report the freelist separately.
 total_freed=$(( db_saved + snap_bytes + log_bytes ))
-log "summary: db $(hr "$db_size_before") -> $(hr "$db_size_after") (file saved $(hr "$db_saved"), reusable $(hr "$db_reclaim")); snapshots $(hr "$snap_bytes"); log $(hr "$log_bytes"); total reclaimed $(hr "$total_freed")"
+ok "summary: db $(hr "$db_size_before") -> $(hr "$db_size_after") (file saved $(hr "$db_saved"), reusable $(hr "$db_reclaim")); snapshots $(hr "$snap_bytes"); log $(hr "$log_bytes"); total reclaimed $(hr "$total_freed")"
