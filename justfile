@@ -9,19 +9,20 @@ check: lint format-check test
 
 # Ruff lint and mypy types.
 lint:
-    cd {{dir}} && uv run ruff check src tests
-    cd {{dir}} && uv run mypy src/
+    cd {{dir}} && uv run --locked ruff check src tests
+    cd {{dir}} && uv run --locked mypy src/
 
 # Fail if anything needs formatting.
 format-check:
-    cd {{dir}} && uv run ruff format --check src tests
+    cd {{dir}} && uv run --locked ruff format --check src tests
 
 # Rewrite formatting.
 format:
     cd {{dir}} && uv run ruff format src tests
 
+# Run the dicmerge test suite.
 test:
-    cd {{dir}} && uv run pytest
+    cd {{dir}} && uv run --locked pytest
 
 # Refresh the dicmerge lockfile to the latest allowed versions.
 update:
