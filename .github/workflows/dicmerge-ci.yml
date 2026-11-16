@@ -27,14 +27,14 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - name: Install dependencies
         run: uv sync --all-groups
-      - name: Ruff check
-        run: uv run ruff check src tests
-      - name: Ruff format
-        run: uv run ruff format --check src tests
-      - name: Mypy
-        run: uv run mypy src/
+      # The justfile owns the lint set; running it here keeps CI and `just lint` from drifting.
+      - name: Lint, format check and types
+        run: just lint && just format-check
 
   test:
     name: Test (coverage gate)
@@ -44,7 +44,10 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
       - name: Install dependencies
         run: uv sync --all-groups
       - name: Test
-        run: uv run pytest
+        run: just test

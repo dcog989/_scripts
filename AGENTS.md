@@ -35,9 +35,10 @@ Scripts live in `src/`, with music tooling in `src/music/`:
 - Install (Python): `uv tool install ./src/dicmerge` from the repository root.
 - Dev: edit the script; reload fish config or re-source the file.
 - Test: `fish -n src/<name>.fish` (fish syntax check) and `bash -n src/<name>.sh` (bash syntax check).
-- Test (dicmerge): `cd src/dicmerge && uv run pytest`.
-- Lint: none configured; dicmerge uses `uv run ruff check` and `uv run mypy src/` from `src/dicmerge/`.
-- Format: `fish_indent src/<name>.fish` for fish; keep shell scripts POSIX/bash-clean; `uv run ruff format` for dicmerge.
+- Test (dicmerge): `just test` (runs `uv run pytest` in `src/dicmerge`).
+- Check (dicmerge): `just check` (ruff, format check, mypy, pytest); `just lint` alone for ruff + mypy.
+- Lint: none configured for the shell scripts; dicmerge via `just lint`.
+- Format: `fish_indent src/<name>.fish` for fish; keep shell scripts POSIX/bash-clean; `just format` for dicmerge.
 - Build: none.
 
 ### Script Form
