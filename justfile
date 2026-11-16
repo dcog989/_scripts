@@ -22,3 +22,7 @@ format:
 
 test:
     cd {{dir}} && uv run pytest
+
+# Refresh the dicmerge lockfile to the latest allowed versions.
+update:
+    cd {{dir}} && uv lock --upgrade
