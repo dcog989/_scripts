@@ -28,6 +28,10 @@ test:
 update:
     cd {{dir}} && uv lock --upgrade
 
+# Wheel and sdist into src/dicmerge/dist.
+build:
+    cd {{dir}} && uv build
+
 # Bump the version from conventional commits and tag it.
 release:
     cog bump --auto

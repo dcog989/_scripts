@@ -39,7 +39,7 @@ Scripts live in `src/`, with music tooling in `src/music/`:
 - Check (dicmerge): `just check` (ruff, format check, mypy, pytest); `just lint` alone for ruff + mypy.
 - Lint: none configured for the shell scripts; dicmerge via `just lint`.
 - Format: `fish_indent src/<name>.fish` for fish; keep shell scripts POSIX/bash-clean; `just format` for dicmerge.
-- Build: none.
+- Build: `just build` (dicmerge wheel + sdist).
 
 ### Script Form
 
