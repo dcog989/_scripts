@@ -172,23 +172,23 @@ BACKUP=1 SESSION_MAX_AGE_DAYS=60 ASSUME_YES=1 DO_VACUUM=1 opencode-maintenance  
 
 All are environment variables; none are command-line flags.
 
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `BACKUP` | prompt (`Y`); `1` when unattended or under `DRY_RUN` | Gzipped DB backup before any write. A failed backup aborts the run. |
-| `BACKUP_DIR` | `~/Downloads` | Where `opencode-db-<date>.db.gz` goes. |
-| `BACKUP_KEEP` | `3` | Newest backups kept; older ones deleted after each successful backup. |
-| `DEAD_GRACE_DAYS` | prompt (`7`) | Days a missing project path must stay missing before its rows are pruned. Also the minimum age of an orphan snapshot dir. |
-| `SESSION_MAX_AGE_DAYS` | prompt (`60`); `0` when unattended, `60` under `DRY_RUN` | Prune sessions inactive this many days, restricted to `ROOTS`. `0` disables. Without a tty it also needs `ASSUME_YES=1`, else the prune is skipped. |
-| `ASSUME_YES` | `0` | `1` deletes ripe sessions without the `[y/N]` confirmation. |
-| `DO_VACUUM` | prompt (`Y`) / `1` | Run `VACUUM` at the end. Needs OpenCode closed; also compacts pages freed by earlier runs. |
-| `LOG_MAX_MB` | `50` | Rotate `opencode.log` and `maintenance.log` above this size. `0` disables. |
-| `LOG_KEEP` | `3` | `.gz` archives kept per log. |
-| `ROOTS` | `$HOME/Projects` | Space-separated allowlist of path prefixes; sessions outside it are never pruned, by dead-path or age. Quote multiple: `ROOTS="$HOME/Projects /mnt/data/src"`. |
-| `SNAP_DIR` | `$OC_DIR/snapshot` | Revert-snapshot store; project dirs without a DB row are deleted once older than `DEAD_GRACE_DAYS`. |
-| `OC_DIR` | `~/.local/share/opencode` | Base data directory; `OC_DB` and `OC_LOG` default inside it. |
-| `OC_DB`, `OC_LOG` | `$OC_DIR/opencode.db`, `$OC_DIR/log/opencode.log` | Override the DB or log path. |
-| `OC_STATE` | `~/.local/state/opencode` | Parent of `maintenance/` (lock, dead-path state, transcript). |
-| `DRY_RUN` | `0` | `1` logs every action as `DRY RUN - would ...`, skips all prompts, and changes no DB, snapshot or log state; the transcript is still appended. |
+| Variable               | Default                                                  | Effect                                                                                                                                                         |
+| ---                    | ---                                                      | ---                                                                                                                                                            |
+| `BACKUP`               | prompt (`Y`); `1` when unattended or under `DRY_RUN`     | Gzipped DB backup before any write. A failed backup aborts the run.                                                                                            |
+| `BACKUP_DIR`           | `~/Downloads`                                            | Where `opencode-db-<date>.db.gz` goes.                                                                                                                         |
+| `BACKUP_KEEP`          | `3`                                                      | Newest backups kept; older ones deleted after each successful backup.                                                                                          |
+| `DEAD_GRACE_DAYS`      | prompt (`7`)                                             | Days a missing project path must stay missing before its rows are pruned. Also the minimum age of an orphan snapshot dir.                                      |
+| `SESSION_MAX_AGE_DAYS` | prompt (`60`); `0` when unattended, `60` under `DRY_RUN` | Prune sessions inactive this many days, restricted to `ROOTS`. `0` disables. Without a tty it also needs `ASSUME_YES=1`, else the prune is skipped.            |
+| `ASSUME_YES`           | `0`                                                      | `1` deletes ripe sessions without the `[y/N]` confirmation.                                                                                                    |
+| `DO_VACUUM`            | prompt (`Y`) / `1`                                       | Run `VACUUM` at the end. Needs OpenCode closed; also compacts pages freed by earlier runs.                                                                     |
+| `LOG_MAX_MB`           | `50`                                                     | Rotate `opencode.log` and `maintenance.log` above this size. `0` disables.                                                                                     |
+| `LOG_KEEP`             | `3`                                                      | `.gz` archives kept per log.                                                                                                                                   |
+| `ROOTS`                | `$HOME/Projects`                                         | Space-separated allowlist of path prefixes; sessions outside it are never pruned, by dead-path or age. Quote multiple: `ROOTS="$HOME/Projects /mnt/data/src"`. |
+| `SNAP_DIR`             | `$OC_DIR/snapshot`                                       | Revert-snapshot store; project dirs without a DB row are deleted once older than `DEAD_GRACE_DAYS`.                                                            |
+| `OC_DIR`               | `~/.local/share/opencode`                                | Base data directory; `OC_DB` and `OC_LOG` default inside it.                                                                                                   |
+| `OC_DB`, `OC_LOG`      | `$OC_DIR/opencode.db`, `$OC_DIR/log/opencode.log`        | Override the DB or log path.                                                                                                                                   |
+| `OC_STATE`             | `~/.local/state/opencode`                                | Parent of `maintenance/` (lock, dead-path state, transcript).                                                                                                  |
+| `DRY_RUN`              | `0`                                                      | `1` logs every action as `DRY RUN - would ...`, skips all prompts, and changes no DB, snapshot or log state; the transcript is still appended.                 |
 
 ---
 

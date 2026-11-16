@@ -61,12 +61,12 @@ Run from this directory:
 uv sync                      # Create/refresh the dev environment
 uv tool upgrade --all        # global uv-installed tools
 uv tool upgrade dicmerge     # just dicmerge
-uv lock --upgrade && uv sync # this project's Python deps (run in src/dicmerge)
-uv run dicmerge              # Run from source
-uv run ruff check            # Lint
-uv run ruff format .         # Format
-uv run mypy src/             # Type check
-uv run pytest                # Test
+just update && uv sync # this project's Python deps (run in src/dicmerge)
+just run              # Run from source
+just lint            # Lint
+just format .         # Format
+just lint             # Type check
+just test                # Test
 uv clean                     # Clean build artifacts
 ```
 

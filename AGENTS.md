@@ -35,7 +35,7 @@ Scripts live in `src/`, with music tooling in `src/music/`:
 - Install (Python): `uv tool install ./src/dicmerge` from the repository root.
 - Dev: edit the script; reload fish config or re-source the file.
 - Test: `fish -n src/<name>.fish` (fish syntax check) and `bash -n src/<name>.sh` (bash syntax check).
-- Test (dicmerge): `just test` (runs `uv run pytest` in `src/dicmerge`).
+- Test (dicmerge): `just test` (runs `just test` in `src/dicmerge`).
 - Check (dicmerge): `just check` (ruff, format check, mypy, pytest); `just lint` alone for ruff + mypy.
 - Lint: none configured for the shell scripts; dicmerge via `just lint`.
 - Format: `fish_indent src/<name>.fish` for fish; keep shell scripts POSIX/bash-clean; `just format` for dicmerge.
@@ -54,7 +54,7 @@ When adding a script, pick the form from this rule. Don't convert a working scri
 
 - After editing a fish file, run `fish -n src/<name>.fish` to confirm it parses.
 - After editing a shell script, run `bash -n src/<name>.sh` to confirm it parses.
-- After editing dicmerge, run `cd src/dicmerge && uv run pytest` (plus `ruff check` and `mypy src/`).
+- After editing dicmerge, run `cd src/dicmerge && just test` (plus `ruff check` and `mypy src/`).
 - Do not run destructive scripts in destructive mode during development unless the user asks.
 
 ## File System Access

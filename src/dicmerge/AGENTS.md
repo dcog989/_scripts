@@ -59,10 +59,10 @@ dicmerge --version            # Show version
 ```sh
 cd src/dicmerge
 uv sync
-uv run ruff check
-uv run ruff format --check
-uv run mypy src/
-uv run pytest
+just lint
+just format-check
+just lint
+just test
 ```
 
 ### CI

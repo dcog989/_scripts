@@ -30,3 +30,7 @@ update:
 # Bump the version from conventional commits and tag it.
 release:
     cog bump --auto
+
+# Run dicmerge from source.
+run:
+    cd {{dir}} && uv run dicmerge
