@@ -33,7 +33,7 @@ jobs:
             exit 1
           fi
       - name: Generate release notes
-        run: cog changelog --at "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+        run: just changelog "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
       - name: Build source archive
         run: git archive --format=tar.gz --prefix="${GITHUB_REF_NAME}/" -o "scripts-${GITHUB_REF_NAME}.tar.gz" "$GITHUB_REF_NAME"
       - name: Publish release

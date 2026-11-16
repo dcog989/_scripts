@@ -43,3 +43,7 @@ init:
 shell:
     bash -n src/*.sh
     fish -n src/*.fish
+
+# Print the changelog for a tag (`just changelog v1.2.3`).
+changelog at:
+    cog changelog --at {{at}}
