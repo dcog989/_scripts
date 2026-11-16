@@ -26,3 +26,7 @@ test:
 # Refresh the dicmerge lockfile to the latest allowed versions.
 update:
     cd {{dir}} && uv lock --upgrade
+
+# Bump the version from conventional commits and tag it.
+release:
+    cog bump --auto
