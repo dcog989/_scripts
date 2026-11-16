@@ -58,7 +58,7 @@ dicmerge --version            # Show version
 
 ```sh
 cd src/dicmerge
-uv sync
+just init
 just lint
 just format-check
 just lint

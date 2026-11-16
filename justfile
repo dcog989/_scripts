@@ -34,3 +34,12 @@ release:
 # Run dicmerge from source.
 run:
     cd {{dir}} && uv run dicmerge
+
+# Create or refresh the dicmerge environment.
+init:
+    cd {{dir}} && uv sync
+
+# Syntax-check every shell and fish script.
+shell:
+    bash -n src/*.sh
+    fish -n src/*.fish

@@ -58,7 +58,7 @@ Filters (`min_length`, `max_length`, `allow_numbers`, `exclude_patterns`) apply 
 Run from this directory:
 
 ```sh
-uv sync                      # Create/refresh the dev environment
+just init                    # Create/refresh the dev environment
 uv tool upgrade --all        # global uv-installed tools
 uv tool upgrade dicmerge     # just dicmerge
 just update && uv sync # this project's Python deps (run in src/dicmerge)
