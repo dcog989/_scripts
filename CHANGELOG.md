@@ -2,6 +2,24 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## v0.3.0 - 2026-11-21
+#### Features
+- (**dicmerge**) add a build recipe - (fd5c31c) - dcog989
+#### Bug Fixes
+- (**dicmerge**) require the uv lockfile in check - (df5b23c) - dcog989
+#### CI
+- install just in the release job - (fd07c10) - dcog989
+#### Chores
+- (**scripts**) call just from the git hooks - (2b3495c) - dcog989
+- (**scripts**) close the remaining raw-command gaps - (f49f963) - dcog989
+- (**scripts**) call the just recipes from the docs - (413ba4a) - dcog989
+- (**scripts**) wrap the remaining dev scripts in just - (9317a93) - dcog989
+- (**scripts**) add an update recipe - (00efc5c) - dcog989
+- (**scripts**) add a justfile for the dicmerge commands - (878ed75) - dcog989
+- updates - (eb608a2) - dcog989
+
+- - -
+
 ## v0.2.0 - 2026-11-15
 #### Features
 - (**git-maintenance**) color-code per-repo output - (aa49031) - dcog989
